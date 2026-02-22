@@ -3,8 +3,10 @@ dist
 build
 .git
 .gitignore
+.env
+.env.*
+!.env.example
 *.md
 docker-compose.yml
-Dockerfile
 .dockerignore
 npm-debug.log

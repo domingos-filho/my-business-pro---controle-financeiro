@@ -3,15 +3,12 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: mybizpro_financeiro
+      args:
+        API_KEY: ${API_KEY:-}
+        VITE_API_KEY: ${VITE_API_KEY:-}
+    image: mybizpro-app:latest
     ports:
-      - "8080:80"
-    restart: always
+      - "${APP_PORT:-40}:80"
+    restart: unless-stopped
     environment:
-      - NODE_ENV=production
-    networks:
-      - app-network
-
-networks:
-  app-network:
-    driver: bridge
+      NODE_ENV: production
