@@ -4,7 +4,7 @@ build
 .git
 .gitignore
 api
-.env
+
 .env.*
 !.env.example
 *.md
