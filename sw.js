@@ -1,5 +1,5 @@
 
-const CACHE_NAME = 'artpro-v1.1.0'; // Incrementar para forçar atualização
+const CACHE_NAME = 'artpro-v1.2.0'; // Incrementar para forçar atualização
 const ASSETS_TO_CACHE = [
   '/',
   '/index.html',
@@ -63,3 +63,4 @@ self.addEventListener('fetch', (event) => {
     })
   );
 });
+

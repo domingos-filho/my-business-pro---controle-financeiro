@@ -4,8 +4,8 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-mybizpro}
-      POSTGRES_USER: ${POSTGRES_USER:-mybizpro}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-mybizpro_change_me}
+      POSTGRES_USER: ${POSTGRES_USER:?POSTGRES_USER is required}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     expose:
@@ -22,7 +22,7 @@ services:
     environment:
       NODE_ENV: production
       PORT: 4000
-      DATABASE_URL: postgres://${POSTGRES_USER:-mybizpro}:${POSTGRES_PASSWORD:-mybizpro_change_me}@db:5432/${POSTGRES_DB:-mybizpro}
+      DATABASE_URL: postgres://${POSTGRES_USER:?POSTGRES_USER is required}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@db:5432/${POSTGRES_DB:-mybizpro}
     depends_on:
       - db
 
