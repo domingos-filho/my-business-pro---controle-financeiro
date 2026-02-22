@@ -1,0 +1,7 @@
+{
+  "name": "My Business Pro - Controle Financeiro",
+  "description": "PWA robusto para gestão financeira de pequenos negócios de produtos personalizados, com foco em offline-first e arquitetura limpa.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
