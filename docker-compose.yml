@@ -17,8 +17,8 @@ services:
       dockerfile: Dockerfile
     image: mybizpro-api:latest
     restart: unless-stopped
-    expose:
-      - "4000"
+    ports:
+      - "${API_PORT:-4000}:4000"
     environment:
       NODE_ENV: production
       PORT: 4000
@@ -34,8 +34,8 @@ services:
         API_KEY: ${API_KEY:-}
         VITE_API_KEY: ${VITE_API_KEY:-}
     image: mybizpro-app:latest
-    expose:
-      - "80"
+    ports:
+      - "${APP_PORT:-40}:80"
     restart: unless-stopped
     environment:
       NODE_ENV: production

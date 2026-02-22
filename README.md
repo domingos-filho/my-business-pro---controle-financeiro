@@ -20,6 +20,8 @@ Copie `.env.example` para `.env` (Docker) ou configure no EasyPanel:
 - `POSTGRES_DB`: nome do banco Postgres
 - `POSTGRES_USER`: usuario do banco
 - `POSTGRES_PASSWORD`: senha do banco
+- `APP_PORT`: porta publicada do frontend web no host (default `40`)
+- `API_PORT`: porta publicada da API no host (default `4000`)
 - `VITE_API_BASE_URL`: base da API no frontend (default `/api`)
 - `VITE_API_PROXY_TARGET`: alvo da API no Vite dev server (default `http://localhost:4000`)
 
