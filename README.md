@@ -1,47 +1,61 @@
 # My Business Pro - Controle Financeiro
 
-Projeto frontend em React + Vite para gestao financeira de microempresa.
+Projeto de gestao financeira para microempresa com:
+
+- `web`: frontend React + Vite servido por Nginx
+- `api`: backend Node.js + Express
+- `db`: PostgreSQL para persistencia centralizada na VPS
+
+## Arquitetura
+
+O frontend consome a API via `/api` (proxy no Nginx).  
+Os dados nao ficam mais em IndexedDB/localStorage para o modulo financeiro principal.
 
 ## Variaveis de ambiente
 
-Copie `.env.example` para `.env.local` (execucao local) ou configure no ambiente de deploy:
+Copie `.env.example` para `.env` (Docker) ou configure no EasyPanel:
 
-- `API_KEY`: chave usada pelo Advisor (Google GenAI).
-- `VITE_API_KEY`: fallback opcional para a mesma chave.
+- `API_KEY`: chave usada no Mentor IA
+- `VITE_API_KEY`: fallback opcional para build do frontend
+- `POSTGRES_DB`: nome do banco Postgres
+- `POSTGRES_USER`: usuario do banco
+- `POSTGRES_PASSWORD`: senha do banco
+- `VITE_API_BASE_URL`: base da API no frontend (default `/api`)
+- `VITE_API_PROXY_TARGET`: alvo da API no Vite dev server (default `http://localhost:4000`)
 
-## Rodar localmente (sem Docker)
+## Desenvolvimento local
 
-Pre-requisito: Node.js 20+.
+### Opcao 1: tudo com Docker Compose
 
-1. Instale dependencias:
-   `npm install`
-2. Configure variaveis em `.env.local`.
-3. Suba em modo desenvolvimento:
-   `npm run dev`
-
-## Deploy com Docker Compose
-
-Arquivos de deploy incluidos no projeto:
-
-- `Dockerfile` (build multi-stage: Node -> Nginx)
-- `docker-compose.yml`
-- `nginx.conf`
-
-### Subir localmente com Docker
-
-1. Crie um arquivo `.env` com as variaveis (pode usar `.env.example` como base).
+1. Crie `.env` com base em `.env.example`.
 2. Execute:
    `docker compose up -d --build`
-3. Acesse:
-   este compose foi otimizado para EasyPanel e nao publica porta localmente.
 
-## Deploy na VPS com EasyPanel (importando do GitHub)
+No compose para EasyPanel, os servicos usam apenas rede interna (`expose`) e nao publicam porta no host.
 
-1. Faca push deste repositorio no GitHub.
-2. No EasyPanel, crie um app do tipo Docker Compose via GitHub.
-3. Aponte para este repositorio/branch.
-4. Configure as variaveis de ambiente no EasyPanel:
-   - `API_KEY` (obrigatoria para o Advisor)
-5. Execute o deploy.
+### Opcao 2: frontend + API separados
 
-O container publica a aplicacao web via Nginx na porta interna `80`, e o EasyPanel faz a exposicao externa.
+1. Inicie Postgres local (ou container).
+2. Na pasta `api`, execute:
+   `npm install && npm start`
+3. Na raiz, execute:
+   `npm install && npm run dev`
+
+## Deploy na VPS com EasyPanel (GitHub + Docker Compose)
+
+1. Faca push do repositorio atualizado no GitHub.
+2. No EasyPanel, crie um app Docker Compose apontando para o repositorio.
+3. Informe o arquivo `docker-compose.yml` da raiz.
+4. Configure variaveis de ambiente no app:
+   - `API_KEY` (obrigatoria para o Mentor IA)
+   - `POSTGRES_DB`
+   - `POSTGRES_USER`
+   - `POSTGRES_PASSWORD`
+5. Faca deploy.
+
+## Estrutura de deploy
+
+- `Dockerfile` (frontend web)
+- `nginx.conf` (SPA + proxy `/api`)
+- `api/Dockerfile` (backend)
+- `docker-compose.yml` (web + api + postgres)

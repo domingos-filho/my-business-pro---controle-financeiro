@@ -1,6 +1,5 @@
 
 import { CustomerRepo, ProductRepo, OrderRepo, TransactionRepo, CategoryRepo } from '../repositories';
-import { SyncStatus } from '../types';
 
 export interface SyncStats {
   pendingCount: number;

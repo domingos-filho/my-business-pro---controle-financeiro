@@ -38,7 +38,11 @@ self.addEventListener('activate', (event) => {
 // Fetch: Network-first para documentos (garante versão nova se online) e Cache-first para assets
 self.addEventListener('fetch', (event) => {
   // Ignora APIs
-  if (event.request.url.includes('generativelanguage') || event.request.url.includes('esm.sh')) {
+  if (
+    event.request.url.includes('/api/') ||
+    event.request.url.includes('generativelanguage') ||
+    event.request.url.includes('esm.sh')
+  ) {
     return;
   }
 
