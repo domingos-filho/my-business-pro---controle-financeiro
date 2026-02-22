@@ -8,7 +8,6 @@ Copie `.env.example` para `.env.local` (execucao local) ou configure no ambiente
 
 - `API_KEY`: chave usada pelo Advisor (Google GenAI).
 - `VITE_API_KEY`: fallback opcional para a mesma chave.
-- `APP_PORT`: porta publicada no host pelo Docker Compose (padrao `40`).
 
 ## Rodar localmente (sem Docker)
 
@@ -34,7 +33,7 @@ Arquivos de deploy incluidos no projeto:
 2. Execute:
    `docker compose up -d --build`
 3. Acesse:
-   `http://localhost:40`
+   este compose foi otimizado para EasyPanel e nao publica porta localmente.
 
 ## Deploy na VPS com EasyPanel (importando do GitHub)
 
@@ -43,7 +42,6 @@ Arquivos de deploy incluidos no projeto:
 3. Aponte para este repositorio/branch.
 4. Configure as variaveis de ambiente no EasyPanel:
    - `API_KEY` (obrigatoria para o Advisor)
-   - `APP_PORT` (opcional; default `40`)
 5. Execute o deploy.
 
-O container publica a aplicacao web via Nginx na porta interna `80` (mapeada para `${APP_PORT}` no host).
+O container publica a aplicacao web via Nginx na porta interna `80`, e o EasyPanel faz a exposicao externa.
