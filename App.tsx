@@ -167,7 +167,11 @@ const App: React.FC = () => {
                 className="w-10 h-10 rounded-full border border-slate-200 flex items-center justify-center bg-white hover:bg-slate-50 transition-colors"
                 title="Sair"
               >
-                <img src={user.avatar} alt={user.name} className="w-8 h-8 rounded-full" />
+                <img
+                  src={user.avatar ?? `https://ui-avatars.com/api/?name=${encodeURIComponent(user.name)}&background=6366f1&color=fff`}
+                  alt={user.name}
+                  className="w-8 h-8 rounded-full"
+                />
               </button>
             </div>
           </div>
