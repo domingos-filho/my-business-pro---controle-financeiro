@@ -9,10 +9,35 @@ class ApiError extends Error {
 }
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api';
+let refreshPromise: Promise<boolean> | null = null;
 
 const joinUrl = (path: string): string => {
   const normalizedPath = path.startsWith('/') ? path : `/${path}`;
   return `${API_BASE_URL}${normalizedPath}`;
+};
+
+const tryRefreshSessionInternal = async (): Promise<boolean> => {
+  if (!refreshPromise) {
+    refreshPromise = (async () => {
+      try {
+        const response = await fetch(joinUrl('/auth/refresh'), {
+          method: 'POST',
+          credentials: 'include',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        });
+
+        return response.ok;
+      } catch (_error) {
+        return false;
+      } finally {
+        refreshPromise = null;
+      }
+    })();
+  }
+
+  return refreshPromise;
 };
 
 const parseErrorMessage = async (response: Response): Promise<string> => {
@@ -30,16 +55,36 @@ const parseErrorMessage = async (response: Response): Promise<string> => {
 };
 
 export const ApiClient = {
-  async request<T>(path: string, init?: RequestInit): Promise<T> {
+  async request<T>(path: string, init?: RequestInit, allowRetry = true): Promise<T> {
     const response = await fetch(joinUrl(path), {
       ...init,
+      credentials: 'include',
       headers: {
         'Content-Type': 'application/json',
         ...(init?.headers || {}),
       },
     });
 
+    const shouldRetryWithRefresh = path === '/auth/me' || !path.startsWith('/auth/');
+
+    if (response.status === 401 && allowRetry && shouldRetryWithRefresh) {
+      const refreshed = await tryRefreshSessionInternal();
+      if (refreshed) {
+        return this.request<T>(path, init, false);
+      }
+    }
+
     if (!response.ok) {
+      const notifyAuthFailure =
+        response.status === 401 &&
+        path !== '/auth/login' &&
+        path !== '/auth/register' &&
+        path !== '/auth/social';
+
+      if (notifyAuthFailure && typeof window !== 'undefined') {
+        window.dispatchEvent(new Event('auth:unauthorized'));
+      }
+
       const message = await parseErrorMessage(response);
       throw new ApiError(message, response.status);
     }

@@ -20,7 +20,10 @@ const formatCurrencyBRL = (value) =>
     currency: 'BRL',
   }).format(value);
 
+const getUserId = (req) => Number(req.user?.id);
+
 router.post('/actions/create', async (req, res, next) => {
+  const userId = getUserId(req);
   const customerId = parseId(req.body?.customerId);
   const productId = parseId(req.body?.productId);
   const quantity = parseId(req.body?.quantity);
@@ -35,8 +38,12 @@ router.post('/actions/create', async (req, res, next) => {
     await client.query('BEGIN');
 
     const productResult = await client.query(
-      `SELECT * FROM products WHERE id = $1 AND deleted_at IS NULL FOR UPDATE`,
-      [productId]
+      `SELECT * FROM products
+       WHERE id = $1
+         AND user_id = $2
+         AND deleted_at IS NULL
+       FOR UPDATE`,
+      [productId, userId]
     );
 
     if (!productResult.rowCount) {
@@ -63,18 +70,21 @@ router.post('/actions/create', async (req, res, next) => {
     });
 
     const orderInsert = await client.query(
-      `INSERT INTO orders (data, created_at, updated_at, deleted_at, sync_status)
-       VALUES ($1, $2, $2, NULL, 'PENDING')
+      `INSERT INTO orders (data, created_at, updated_at, deleted_at, sync_status, user_id)
+       VALUES ($1, $2, $2, NULL, 'PENDING', $3)
        RETURNING id`,
-      [orderPayload, now]
+      [orderPayload, now, userId]
     );
 
     const productData = { ...(productResult.rows[0].data || {}) };
     productData.stockCount = currentStock - quantity;
 
     await client.query(
-      `UPDATE products SET data = $2::jsonb, updated_at = $3, sync_status = 'PENDING' WHERE id = $1`,
-      [productId, productData, now]
+      `UPDATE products
+       SET data = $2::jsonb, updated_at = $3, sync_status = 'PENDING'
+       WHERE id = $1
+         AND user_id = $4`,
+      [productId, productData, now, userId]
     );
 
     await client.query('COMMIT');
@@ -88,6 +98,7 @@ router.post('/actions/create', async (req, res, next) => {
 });
 
 router.post('/actions/mark-paid', async (req, res, next) => {
+  const userId = getUserId(req);
   const orderId = parseId(req.body?.orderId);
 
   if (!orderId) {
@@ -100,8 +111,12 @@ router.post('/actions/mark-paid', async (req, res, next) => {
     await client.query('BEGIN');
 
     const orderResult = await client.query(
-      `SELECT * FROM orders WHERE id = $1 AND deleted_at IS NULL FOR UPDATE`,
-      [orderId]
+      `SELECT * FROM orders
+       WHERE id = $1
+         AND user_id = $2
+         AND deleted_at IS NULL
+       FOR UPDATE`,
+      [orderId, userId]
     );
 
     if (!orderResult.rowCount) {
@@ -118,11 +133,13 @@ router.post('/actions/mark-paid', async (req, res, next) => {
 
     const categoryResult = await client.query(
       `SELECT * FROM categories
-       WHERE deleted_at IS NULL
+       WHERE user_id = $1
+         AND deleted_at IS NULL
          AND lower(coalesce(data->>'name', '')) = 'vendas'
          AND coalesce(data->>'type', '') = 'INCOME'
        LIMIT 1
-       FOR UPDATE`
+       FOR UPDATE`,
+      [userId]
     );
 
     let categoryId;
@@ -135,10 +152,10 @@ router.post('/actions/mark-paid', async (req, res, next) => {
       });
 
       const categoryInsert = await client.query(
-        `INSERT INTO categories (data, created_at, updated_at, deleted_at, sync_status)
-         VALUES ($1, $2, $2, NULL, 'PENDING')
+        `INSERT INTO categories (data, created_at, updated_at, deleted_at, sync_status, user_id)
+         VALUES ($1, $2, $2, NULL, 'PENDING', $3)
          RETURNING id`,
-        [categoryPayload, now]
+        [categoryPayload, now, userId]
       );
       categoryId = categoryInsert.rows[0].id;
     } else {
@@ -149,8 +166,11 @@ router.post('/actions/mark-paid', async (req, res, next) => {
     orderData.status = 'PAID';
 
     await client.query(
-      `UPDATE orders SET data = $2::jsonb, updated_at = $3, sync_status = 'PENDING' WHERE id = $1`,
-      [orderId, orderData, now]
+      `UPDATE orders
+       SET data = $2::jsonb, updated_at = $3, sync_status = 'PENDING'
+       WHERE id = $1
+         AND user_id = $4`,
+      [orderId, orderData, now, userId]
     );
 
     const amount = Number(orderEntity.totalAmount || 0);
@@ -164,9 +184,9 @@ router.post('/actions/mark-paid', async (req, res, next) => {
     });
 
     await client.query(
-      `INSERT INTO transactions (data, created_at, updated_at, deleted_at, sync_status)
-       VALUES ($1, $2, $2, NULL, 'PENDING')`,
-      [txPayload, now]
+      `INSERT INTO transactions (data, created_at, updated_at, deleted_at, sync_status, user_id)
+       VALUES ($1, $2, $2, NULL, 'PENDING', $3)`,
+      [txPayload, now, userId]
     );
 
     await client.query('COMMIT');
@@ -180,6 +200,7 @@ router.post('/actions/mark-paid', async (req, res, next) => {
 });
 
 router.post('/actions/cancel', async (req, res, next) => {
+  const userId = getUserId(req);
   const orderId = parseId(req.body?.orderId);
 
   if (!orderId) {
@@ -192,8 +213,12 @@ router.post('/actions/cancel', async (req, res, next) => {
     await client.query('BEGIN');
 
     const orderResult = await client.query(
-      `SELECT * FROM orders WHERE id = $1 AND deleted_at IS NULL FOR UPDATE`,
-      [orderId]
+      `SELECT * FROM orders
+       WHERE id = $1
+         AND user_id = $2
+         AND deleted_at IS NULL
+       FOR UPDATE`,
+      [orderId, userId]
     );
 
     if (!orderResult.rowCount) {
@@ -209,8 +234,12 @@ router.post('/actions/cancel', async (req, res, next) => {
 
       if (productId && quantity > 0) {
         const productResult = await client.query(
-          `SELECT * FROM products WHERE id = $1 AND deleted_at IS NULL FOR UPDATE`,
-          [productId]
+          `SELECT * FROM products
+           WHERE id = $1
+             AND user_id = $2
+             AND deleted_at IS NULL
+           FOR UPDATE`,
+          [productId, userId]
         );
 
         if (productResult.rowCount) {
@@ -219,8 +248,11 @@ router.post('/actions/cancel', async (req, res, next) => {
           productData.stockCount = currentStock + quantity;
 
           await client.query(
-            `UPDATE products SET data = $2::jsonb, updated_at = $3, sync_status = 'PENDING' WHERE id = $1`,
-            [productId, productData, now]
+            `UPDATE products
+             SET data = $2::jsonb, updated_at = $3, sync_status = 'PENDING'
+             WHERE id = $1
+               AND user_id = $4`,
+            [productId, productData, now, userId]
           );
         }
       }
@@ -232,8 +264,9 @@ router.post('/actions/cancel', async (req, res, next) => {
     await client.query(
       `UPDATE orders
        SET data = $2::jsonb, updated_at = $3, deleted_at = $3, sync_status = 'PENDING'
-       WHERE id = $1`,
-      [orderId, orderData, now]
+       WHERE id = $1
+         AND user_id = $4`,
+      [orderId, orderData, now, userId]
     );
 
     await client.query('COMMIT');

@@ -19,9 +19,10 @@ export const Auth: React.FC<AuthProps> = ({ onLogin }) => {
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!email || !password) return;
     setLoading(true);
     try {
-      const user = await AuthService.loginWithEmail(email);
+      const user = await AuthService.loginWithEmail(email, password);
       onLogin(user);
     } catch (error) {
       alert('Erro ao entrar. Tente novamente.');
@@ -35,7 +36,7 @@ export const Auth: React.FC<AuthProps> = ({ onLogin }) => {
     if (!name || !email || !password) return;
     setLoading(true);
     try {
-      const user = await AuthService.register(name, email);
+      const user = await AuthService.register(name, email, password);
       onLogin(user);
     } catch (error) {
       alert('Erro ao criar conta. Tente novamente.');

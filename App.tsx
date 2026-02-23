@@ -14,6 +14,7 @@ import { AuthService, User } from './services/AuthService';
 
 const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(AuthService.getCurrentUser());
+  const [authLoading, setAuthLoading] = useState(true);
   const [currentView, setView] = useState('dashboard');
   const [syncStats, setSyncStats] = useState<SyncStats>({ pendingCount: 0 });
   const [showUpdateToast, setShowUpdateToast] = useState(false);
@@ -23,6 +24,35 @@ const App: React.FC = () => {
     const stats = await SyncService.getSyncStats();
     setSyncStats(stats);
   };
+
+  useEffect(() => {
+    let active = true;
+
+    const restore = async () => {
+      const restoredUser = await AuthService.restoreSession();
+      if (!active) return;
+      setUser(restoredUser);
+      setAuthLoading(false);
+    };
+
+    restore();
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    const handler = (_event: Event) => {
+      setUser(null);
+      setView('dashboard');
+      setAuthLoading(false);
+    };
+
+    window.addEventListener('auth:unauthorized', handler);
+    return () => {
+      window.removeEventListener('auth:unauthorized', handler);
+    };
+  }, []);
 
   useEffect(() => {
     if (!user) return;
@@ -71,6 +101,14 @@ const App: React.FC = () => {
     if (isToday) return `Hoje às ${timeStr}`;
     return `${date.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })} às ${timeStr}`;
   };
+
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-slate-950 flex items-center justify-center">
+        <div className="text-white text-sm font-bold uppercase tracking-widest">Carregando sessao...</div>
+      </div>
+    );
+  }
 
   if (!user) {
     return <Auth onLogin={setUser} />;
