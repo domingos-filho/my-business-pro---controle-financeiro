@@ -1,0 +1,31 @@
+<svg width="96" height="96" viewBox="0 0 96 96" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="mybizpro-mark-gradient" x1="22" y1="20" x2="72" y2="74" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#7C8CFF" />
+      <stop offset="55%" stop-color="#6366F1" />
+      <stop offset="100%" stop-color="#A855F7" />
+    </linearGradient>
+    <linearGradient id="mybizpro-mark-bg" x1="16" y1="12" x2="80" y2="84" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#131B2E" />
+      <stop offset="100%" stop-color="#0B1120" />
+    </linearGradient>
+  </defs>
+
+  <rect x="8" y="8" width="80" height="80" rx="26" fill="url(#mybizpro-mark-bg)" />
+  <rect x="8.5" y="8.5" width="79" height="79" rx="25.5" stroke="rgba(255,255,255,0.08)" />
+
+  <path
+    d="M26 67V30L45 49L60 34L69 43V67"
+    stroke="url(#mybizpro-mark-gradient)"
+    stroke-width="8"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  />
+  <path
+    d="M55 34H69V48"
+    stroke="url(#mybizpro-mark-gradient)"
+    stroke-width="8"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  />
+</svg>

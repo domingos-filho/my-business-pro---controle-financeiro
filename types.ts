@@ -67,3 +67,28 @@ export interface DashboardStats {
   netProfit: number;
   pendingSales: number;
 }
+
+export interface AiBusinessInsight {
+  summary: string;
+  recommendations: string[];
+  opportunities: string[];
+}
+
+export interface AiSuggestedMaterial {
+  name: string;
+  estimatedPriceRange: string;
+  purpose: string;
+  notes: string;
+}
+
+export interface AiProductAnalysis {
+  productName: string;
+  positioningSummary: string;
+  idealPriceRange: string;
+  targetAudience: string;
+  bestSalesChannels: string[];
+  suggestedMaterials: AiSuggestedMaterial[];
+  marketingHighlights: string[];
+  nextSteps: string[];
+  warnings: string[];
+}

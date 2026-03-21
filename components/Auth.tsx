@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { AuthService, User } from '../services/AuthService';
+import { BrandLogo } from './BrandLogo';
 
 interface AuthProps {
   onLogin: (user: User) => void;
@@ -12,6 +13,7 @@ export const Auth: React.FC<AuthProps> = ({ onLogin }) => {
   const [loading, setLoading] = useState(false);
   const [socialLoading, setSocialLoading] = useState<'google' | 'apple' | null>(null);
   const [errorMessage, setErrorMessage] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const socialLoginEnabled = import.meta.env.VITE_ENABLE_SOCIAL_LOGIN === 'true';
 
   const [email, setEmail] = useState('');
@@ -72,6 +74,7 @@ export const Auth: React.FC<AuthProps> = ({ onLogin }) => {
     'block text-[11px] font-black text-slate-400 uppercase tracking-widest ml-1 mb-1.5';
   const socialBtnClasses =
     'w-full py-4 rounded-2xl border border-slate-200 bg-white flex items-center justify-center gap-3 font-bold text-slate-700 hover:bg-slate-50 transition-all active:scale-[0.98] shadow-sm disabled:opacity-50';
+  const passwordInputClasses = `${inputClasses} pr-24`;
 
   if (step === 'welcome') {
     return (
@@ -80,12 +83,13 @@ export const Auth: React.FC<AuthProps> = ({ onLogin }) => {
         <div className="absolute bottom-[-10%] left-[-10%] w-64 h-64 bg-purple-600/10 blur-[100px] rounded-full"></div>
 
         <div className="relative z-10 w-full max-w-xs">
-          <div className="w-24 h-24 bg-gradient-to-tr from-indigo-600 to-purple-600 rounded-[2.5rem] flex items-center justify-center text-4xl shadow-2xl shadow-indigo-500/40 mb-10 mx-auto animate-pulse">
-            *
-          </div>
-          <h1 className="text-5xl font-black text-white tracking-tighter mb-4">
-            MyBizPro<span className="text-indigo-500">.</span>
-          </h1>
+          <BrandLogo
+            theme="light"
+            size="hero"
+            layout="stacked"
+            showTagline
+            className="mb-10"
+          />
           <p className="text-slate-400 font-medium leading-relaxed mb-14">
             Gestao inteligente para artesaos e criadores de produtos personalizados.
           </p>
@@ -161,14 +165,24 @@ export const Auth: React.FC<AuthProps> = ({ onLogin }) => {
 
             <div>
               <label className={labelClasses}>Senha</label>
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className={inputClasses}
-                placeholder="**********"
-                required
-              />
+              <div className="relative">
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className={passwordInputClasses}
+                  placeholder="**********"
+                  required
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((current) => !current)}
+                  className="absolute inset-y-0 right-4 my-auto h-fit text-xs font-black uppercase tracking-wider text-slate-400 hover:text-indigo-600 transition-colors"
+                  aria-label={showPassword ? 'Ocultar senha' : 'Mostrar senha'}
+                >
+                  {showPassword ? 'Ocultar' : 'Mostrar'}
+                </button>
+              </div>
               {step === 'signup' && (
                 <p className="mt-2 ml-1 text-[11px] font-medium text-slate-400">
                   Use no minimo 10 caracteres com letra maiuscula, minuscula e numero.
@@ -192,7 +206,7 @@ export const Auth: React.FC<AuthProps> = ({ onLogin }) => {
               {loading ? (
                 <span className="flex items-center justify-center gap-3">
                   <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
-                  Entrando...
+                  {step === 'login' ? 'Entrando...' : 'Criando conta...'}
                 </span>
               ) : step === 'login' ? (
                 'Entrar'

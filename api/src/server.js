@@ -1,6 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
+import aiRouter from './routes/ai.js';
 import authRouter from './routes/auth.js';
 import ordersRouter from './routes/orders.js';
 import resourcesRouter from './routes/resources.js';
@@ -9,6 +10,21 @@ import { requireAuth } from './middleware/auth.js';
 
 const app = express();
 const PORT = Number(process.env.PORT || 4000);
+
+const normalizeHost = (value = '') =>
+  value
+    .split(',')[0]
+    .trim()
+    .toLowerCase();
+
+const getOriginHost = (origin) => {
+  try {
+    return new URL(origin).host.toLowerCase();
+  } catch (_error) {
+    return '';
+  }
+};
+
 const corsAllowedOrigins = new Set(
   String(process.env.CORS_ALLOWED_ORIGINS || '')
     .split(',')
@@ -21,13 +37,13 @@ app.use((req, res, next) => {
   const origin = req.get('origin');
   if (!origin) return next();
 
-  const host = (req.get('x-forwarded-host') || req.get('host') || '').trim();
-  const forwardedProto = (req.get('x-forwarded-proto') || req.protocol || 'http')
-    .split(',')[0]
-    .trim();
-  const sameOrigin = host ? `${forwardedProto}://${host}` : null;
+  const originHost = getOriginHost(origin);
+  const requestHosts = [
+    normalizeHost(req.get('x-forwarded-host')),
+    normalizeHost(req.get('host')),
+  ].filter(Boolean);
 
-  if (origin === sameOrigin || corsAllowedOrigins.has(origin)) {
+  if (corsAllowedOrigins.has(origin) || requestHosts.includes(originHost)) {
     return next();
   }
 
@@ -56,6 +72,7 @@ app.get('/api/health', async (_req, res) => {
 });
 
 app.use('/api/auth', authRouter);
+app.use('/api/ai', requireAuth, aiRouter);
 app.use('/api/orders', requireAuth, ordersRouter);
 app.use('/api', requireAuth, resourcesRouter);
 
