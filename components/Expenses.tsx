@@ -37,6 +37,16 @@ export const Expenses: React.FC = () => {
     loadData();
   }, []);
 
+  const parseIntegerOrZero = (value: string) => {
+    const parsed = Number.parseInt(value, 10);
+    return Number.isFinite(parsed) ? parsed : 0;
+  };
+
+  const parseFloatOrZero = (value: string) => {
+    const parsed = Number.parseFloat(value);
+    return Number.isFinite(parsed) ? parsed : 0;
+  };
+
   const filteredCategories = useMemo(
     () => categories.filter((category) => category.type === formData.type),
     [categories, formData.type],
@@ -154,7 +164,7 @@ export const Expenses: React.FC = () => {
               <select
                 value={formData.categoryId}
                 onChange={(event) =>
-                  setFormData({ ...formData, categoryId: parseInt(event.target.value, 10) })
+                  setFormData({ ...formData, categoryId: parseIntegerOrZero(event.target.value) })
                 }
                 className={inputClasses}
                 required
@@ -215,7 +225,7 @@ export const Expenses: React.FC = () => {
                 step="0.01"
                 value={formData.amount}
                 onChange={(event) =>
-                  setFormData({ ...formData, amount: parseFloat(event.target.value) })
+                  setFormData({ ...formData, amount: parseFloatOrZero(event.target.value) })
                 }
                 className={`${inputClasses} text-2xl font-black py-4`}
                 placeholder="0,00"

@@ -41,6 +41,51 @@ const getAiClient = () => {
   return new GoogleGenAI({ apiKey: process.env.API_KEY });
 };
 
+const parseProviderPayload = (value) => {
+  try {
+    return JSON.parse(String(value || ''));
+  } catch (_error) {
+    return null;
+  }
+};
+
+const normalizeAiError = (error) => {
+  const rawMessage = String(error?.message || '');
+  const providerPayload = parseProviderPayload(rawMessage);
+  const providerMessage =
+    providerPayload?.error?.message && typeof providerPayload.error.message === 'string'
+      ? providerPayload.error.message
+      : rawMessage;
+
+  if (/reported as leaked/i.test(providerMessage)) {
+    const mappedError = new Error(
+      'A chave da IA foi bloqueada pelo Google por vazamento. Gere uma nova API_KEY e atualize o EasyPanel.',
+    );
+    mappedError.statusCode = 503;
+    return mappedError;
+  }
+
+  if (/api key not valid|invalid api key|permission_denied/i.test(providerMessage)) {
+    const mappedError = new Error(
+      'A IA nao conseguiu autenticar no Google. Revise a API_KEY configurada no servidor.',
+    );
+    mappedError.statusCode = 503;
+    return mappedError;
+  }
+
+  if (/quota|rate limit|resource has been exhausted/i.test(providerMessage)) {
+    const mappedError = new Error(
+      'A cota da IA foi atingida no provedor. Aguarde ou ajuste o faturamento da chave.',
+    );
+    mappedError.statusCode = 503;
+    return mappedError;
+  }
+
+  const mappedError = new Error('Falha ao consultar a IA. Revise a configuracao da API_KEY e tente novamente.');
+  mappedError.statusCode = 502;
+  return mappedError;
+};
+
 const extractJsonPayload = (rawText) => {
   const trimmed = String(rawText || '').trim();
   const withoutFences = trimmed
@@ -82,13 +127,17 @@ const toProductFallback = (product, text) => ({
 });
 
 const askForJson = async (prompt) => {
-  const ai = getAiClient();
-  const response = await ai.models.generateContent({
-    model: AI_MODEL,
-    contents: prompt,
-  });
+  try {
+    const ai = getAiClient();
+    const response = await ai.models.generateContent({
+      model: AI_MODEL,
+      contents: prompt,
+    });
 
-  return String(response.text || '').trim();
+    return String(response.text || '').trim();
+  } catch (error) {
+    throw normalizeAiError(error);
+  }
 };
 
 const buildOverviewPrompt = ({ revenue, expenses, profit, totalSales, pendingSales, lowStockProducts, topProducts }) => `

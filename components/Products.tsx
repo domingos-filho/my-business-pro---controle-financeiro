@@ -22,6 +22,16 @@ export const Products: React.FC = () => {
     loadProducts();
   }, []);
 
+  const parseIntegerOrZero = (value: string) => {
+    const parsed = Number.parseInt(value, 10);
+    return Number.isFinite(parsed) ? parsed : 0;
+  };
+
+  const parseFloatOrZero = (value: string) => {
+    const parsed = Number.parseFloat(value);
+    return Number.isFinite(parsed) ? parsed : 0;
+  };
+
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
     if (!newProduct.name) return;
@@ -91,7 +101,7 @@ export const Products: React.FC = () => {
                 type="number"
                 value={newProduct.stockCount}
                 onChange={(event) =>
-                  setNewProduct({ ...newProduct, stockCount: parseInt(event.target.value, 10) })
+                  setNewProduct({ ...newProduct, stockCount: parseIntegerOrZero(event.target.value) })
                 }
                 className={inputClasses}
                 required
@@ -106,7 +116,7 @@ export const Products: React.FC = () => {
                 step="0.01"
                 value={newProduct.baseCost}
                 onChange={(event) =>
-                  setNewProduct({ ...newProduct, baseCost: parseFloat(event.target.value) })
+                  setNewProduct({ ...newProduct, baseCost: parseFloatOrZero(event.target.value) })
                 }
                 className={`${inputClasses} font-mono`}
               />
@@ -120,7 +130,7 @@ export const Products: React.FC = () => {
                 step="0.01"
                 value={newProduct.sellingPrice}
                 onChange={(event) =>
-                  setNewProduct({ ...newProduct, sellingPrice: parseFloat(event.target.value) })
+                  setNewProduct({ ...newProduct, sellingPrice: parseFloatOrZero(event.target.value) })
                 }
                 className={`${inputClasses} font-mono`}
               />

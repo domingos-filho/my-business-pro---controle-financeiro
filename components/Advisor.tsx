@@ -36,6 +36,11 @@ export const Advisor: React.FC = () => {
     loadProducts();
   }, []);
 
+  const parseProductId = (value: string) => {
+    const parsed = Number.parseInt(value, 10);
+    return Number.isInteger(parsed) && parsed > 0 ? parsed : 0;
+  };
+
   const handleOverviewInsight = async () => {
     setError('');
     setLoadingOverview(true);
@@ -182,7 +187,7 @@ export const Advisor: React.FC = () => {
               </label>
               <select
                 value={selectedProductId}
-                onChange={(event) => setSelectedProductId(parseInt(event.target.value, 10))}
+                onChange={(event) => setSelectedProductId(parseProductId(event.target.value))}
                 className="w-full rounded-2xl border border-slate-200 bg-white p-3.5 text-slate-900 font-medium outline-none focus:ring-2 focus:ring-indigo-500"
               >
                 {products.length === 0 ? (

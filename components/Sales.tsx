@@ -50,6 +50,11 @@ export const Sales: React.FC = () => {
     loadData();
   }, []);
 
+  const parseIntegerOrZero = (value: string) => {
+    const parsed = Number.parseInt(value, 10);
+    return Number.isFinite(parsed) ? parsed : 0;
+  };
+
   const filteredAndSortedOrders = useMemo(() => {
     let result = [...orders];
 
@@ -182,7 +187,7 @@ export const Sales: React.FC = () => {
               <select
                 value={formData.customerId}
                 onChange={(event) =>
-                  setFormData({ ...formData, customerId: parseInt(event.target.value, 10) })
+                  setFormData({ ...formData, customerId: parseIntegerOrZero(event.target.value) })
                 }
                 className={formInputClasses}
                 required
@@ -202,7 +207,7 @@ export const Sales: React.FC = () => {
               <select
                 value={formData.productId}
                 onChange={(event) =>
-                  setFormData({ ...formData, productId: parseInt(event.target.value, 10) })
+                  setFormData({ ...formData, productId: parseIntegerOrZero(event.target.value) })
                 }
                 className={formInputClasses}
                 required
@@ -224,7 +229,7 @@ export const Sales: React.FC = () => {
                 min="1"
                 value={formData.quantity}
                 onChange={(event) =>
-                  setFormData({ ...formData, quantity: parseInt(event.target.value, 10) })
+                  setFormData({ ...formData, quantity: parseIntegerOrZero(event.target.value) })
                 }
                 className={formInputClasses}
                 required

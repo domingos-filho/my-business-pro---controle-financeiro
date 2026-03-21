@@ -48,6 +48,9 @@ const parseErrorMessage = async (response: Response): Promise<string> => {
     if (payload?.error && typeof payload.error === 'string') {
       return payload.error;
     }
+    if (payload?.error?.message && typeof payload.error.message === 'string') {
+      return payload.error.message;
+    }
   }
 
   const fallback = await response.text().catch(() => '');
