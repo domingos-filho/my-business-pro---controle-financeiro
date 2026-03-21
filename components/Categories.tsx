@@ -27,7 +27,15 @@ export const Categories: React.FC = () => {
 
   const loadData = async () => {
     const list = await CategoryRepo.getAllActive();
-    setCategories(list);
+    setCategories(
+      [...list].sort((left, right) => {
+        if (Boolean(left.isSystem) !== Boolean(right.isSystem)) {
+          return left.isSystem ? -1 : 1;
+        }
+
+        return left.name.localeCompare(right.name, 'pt-BR');
+      }),
+    );
   };
 
   useEffect(() => {
@@ -41,6 +49,10 @@ export const Categories: React.FC = () => {
   };
 
   const handleOpenEdit = (category: Category) => {
+    if (category.isSystem) {
+      return;
+    }
+
     setEditingCategory(category);
     setFormData({
       name: category.name,
@@ -101,7 +113,9 @@ export const Categories: React.FC = () => {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h2 className="text-3xl font-black text-slate-900 tracking-tight">Tags & Categorias</h2>
-          <p className="text-slate-500 text-sm font-medium">Organize seu fluxo financeiro</p>
+          <p className="text-slate-500 text-sm font-medium">
+            Categorias padrao ficam disponiveis para todos. As que voce criar ficam so na sua conta.
+          </p>
         </div>
         <button
           onClick={showForm ? () => setShowForm(false) : handleOpenAdd}
@@ -257,25 +271,40 @@ export const Categories: React.FC = () => {
                     >
                       {category.type === TransactionType.INCOME ? 'Receita' : 'Despesa'}
                     </span>
+                    <span
+                      className={`text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full inline-block mt-1.5 border whitespace-nowrap ml-2 ${
+                        category.isSystem
+                          ? 'bg-slate-100 text-slate-600 border-slate-200'
+                          : 'bg-indigo-50 text-indigo-600 border-indigo-100'
+                      }`}
+                    >
+                      {category.isSystem ? 'Padrao Global' : 'Sua Categoria'}
+                    </span>
                   </div>
                 </div>
 
-                <div className="flex flex-shrink-0 gap-1.5">
-                  <button
-                    onClick={() => handleOpenEdit(category)}
-                    className="w-10 h-10 flex items-center justify-center bg-slate-50 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition-all active:scale-90"
-                    title="Editar"
-                  >
-                    <EditIcon className="w-4 h-4" />
-                  </button>
-                  <button
-                    onClick={() => category.id && handleDelete(category.id)}
-                    className="w-10 h-10 flex items-center justify-center bg-slate-50 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-all active:scale-90"
-                    title="Excluir"
-                  >
-                    <TrashIcon className="w-4 h-4" />
-                  </button>
-                </div>
+                {category.isSystem ? (
+                  <div className="px-3 py-2 rounded-xl bg-slate-50 border border-slate-100 text-[10px] font-black uppercase tracking-widest text-slate-400 text-center">
+                    Somente leitura
+                  </div>
+                ) : (
+                  <div className="flex flex-shrink-0 gap-1.5">
+                    <button
+                      onClick={() => handleOpenEdit(category)}
+                      className="w-10 h-10 flex items-center justify-center bg-slate-50 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition-all active:scale-90"
+                      title="Editar"
+                    >
+                      <EditIcon className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={() => category.id && handleDelete(category.id)}
+                      className="w-10 h-10 flex items-center justify-center bg-slate-50 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-all active:scale-90"
+                      title="Excluir"
+                    >
+                      <TrashIcon className="w-4 h-4" />
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
           </div>

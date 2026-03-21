@@ -55,6 +55,8 @@ const MAX_ACTIVE_SESSIONS = toPositiveInt(process.env.MAX_ACTIVE_SESSIONS, 10);
 const ALLOW_LEGACY_DATA_CLAIM = parseBool(process.env.ALLOW_LEGACY_DATA_CLAIM, false);
 
 const LEGACY_TABLES = ['customers', 'products', 'orders', 'transactions', 'categories'];
+const buildLegacyWhereClause = (table) =>
+  table === 'categories' ? 'user_id IS NULL AND is_system = FALSE' : 'user_id IS NULL';
 
 const normalizeEmail = (value) => String(value || '').trim().toLowerCase();
 const normalizeName = (value) => String(value || '').trim();
@@ -326,7 +328,7 @@ const getLegacySummary = async (client) => {
     const legacyResult = await client.query(
       `SELECT COUNT(*)::int AS legacy_count
        FROM ${table}
-       WHERE user_id IS NULL`
+       WHERE ${buildLegacyWhereClause(table)}`
     );
     const scopedResult = await client.query(
       `SELECT COUNT(*)::int AS scoped_count
@@ -958,7 +960,7 @@ router.post('/claim-legacy-data', requireAuth, async (req, res, next) => {
       const result = await client.query(
         `UPDATE ${table}
          SET user_id = $1
-         WHERE user_id IS NULL
+         WHERE ${buildLegacyWhereClause(table)}
          RETURNING id`,
         [req.user.id]
       );

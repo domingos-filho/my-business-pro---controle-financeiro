@@ -10,6 +10,109 @@ const parseId = (value) => {
 
 const getTable = (resource) => RESOURCE_TABLES[resource];
 const getUserId = (req) => Number(req.user?.id);
+const isCategoriesTable = (table) => table === RESOURCE_TABLES.categories;
+const buildHttpError = (status, message) => {
+  const error = new Error(message);
+  error.statusCode = status;
+  return error;
+};
+const buildReadAccessClause = (table, userParamRef) =>
+  isCategoriesTable(table) ? `(user_id = ${userParamRef} OR is_system = TRUE)` : `user_id = ${userParamRef}`;
+const buildListOrderClause = (table) =>
+  isCategoriesTable(table)
+    ? `ORDER BY CASE WHEN is_system THEN 0 ELSE 1 END,
+              lower(coalesce(data->>'name', '')) ASC,
+              id ASC`
+    : 'ORDER BY id ASC';
+
+const parseOptionalReferenceId = (value) => {
+  if (value === undefined || value === null || value === '') {
+    return null;
+  }
+
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : NaN;
+};
+
+const assertScopedReference = async (client, { table, id, userId, allowSystem = false, label }) => {
+  const scopedQuery = allowSystem && isCategoriesTable(table)
+    ? `SELECT id FROM ${table}
+       WHERE id = $1
+         AND deleted_at IS NULL
+         AND (user_id = $2 OR is_system = TRUE)
+       LIMIT 1`
+    : `SELECT id FROM ${table}
+       WHERE id = $1
+         AND deleted_at IS NULL
+         AND user_id = $2
+       LIMIT 1`;
+
+  const result = await client.query(scopedQuery, [id, userId]);
+  if (!result.rowCount) {
+    throw buildHttpError(404, `${label} nao encontrado`);
+  }
+};
+
+const validateReferences = async (client, resource, payload, userId) => {
+  if (resource === 'orders') {
+    if (Object.prototype.hasOwnProperty.call(payload, 'customerId')) {
+      const customerId = parseOptionalReferenceId(payload.customerId);
+      if (!customerId) {
+        throw buildHttpError(400, 'Cliente invalido');
+      }
+      await assertScopedReference(client, {
+        table: RESOURCE_TABLES.customers,
+        id: customerId,
+        userId,
+        label: 'Cliente',
+      });
+    }
+
+    if (Object.prototype.hasOwnProperty.call(payload, 'productId')) {
+      const productId = parseOptionalReferenceId(payload.productId);
+      if (!productId) {
+        throw buildHttpError(400, 'Produto invalido');
+      }
+      await assertScopedReference(client, {
+        table: RESOURCE_TABLES.products,
+        id: productId,
+        userId,
+        label: 'Produto',
+      });
+    }
+  }
+
+  if (resource === 'transactions') {
+    if (Object.prototype.hasOwnProperty.call(payload, 'categoryId')) {
+      const categoryId = parseOptionalReferenceId(payload.categoryId);
+      if (!categoryId) {
+        throw buildHttpError(400, 'Categoria invalida');
+      }
+      await assertScopedReference(client, {
+        table: RESOURCE_TABLES.categories,
+        id: categoryId,
+        userId,
+        allowSystem: true,
+        label: 'Categoria',
+      });
+    }
+
+    if (Object.prototype.hasOwnProperty.call(payload, 'orderId')) {
+      if (payload.orderId !== null && payload.orderId !== '') {
+        const orderId = parseOptionalReferenceId(payload.orderId);
+        if (!orderId) {
+          throw buildHttpError(400, 'Pedido invalido');
+        }
+        await assertScopedReference(client, {
+          table: RESOURCE_TABLES.orders,
+          id: orderId,
+          userId,
+          label: 'Pedido',
+        });
+      }
+    }
+  }
+};
 
 const notFound = (res, message = 'Registro nao encontrado') =>
   res.status(404).json({ error: message });
@@ -116,7 +219,7 @@ router.get('/:resource/:id', async (req, res, next) => {
     const result = await pool.query(
       `SELECT * FROM ${table}
        WHERE id = $1
-         AND user_id = $2
+         AND ${buildReadAccessClause(table, '$2')}
          AND deleted_at IS NULL`,
       [id, userId]
     );
@@ -139,15 +242,15 @@ router.get('/:resource', async (req, res, next) => {
     const result = active
       ? await pool.query(
           `SELECT * FROM ${table}
-           WHERE user_id = $1
+           WHERE ${buildReadAccessClause(table, '$1')}
              AND deleted_at IS NULL
-           ORDER BY id ASC`,
+           ${buildListOrderClause(table)}`,
           [userId]
         )
       : await pool.query(
           `SELECT * FROM ${table}
-           WHERE user_id = $1
-           ORDER BY id ASC`,
+           WHERE ${buildReadAccessClause(table, '$1')}
+           ${buildListOrderClause(table)}`,
           [userId]
         );
 
@@ -166,6 +269,8 @@ router.post('/:resource', async (req, res, next) => {
   const now = Date.now();
 
   try {
+    await validateReferences(pool, req.params.resource, data, userId);
+
     const result = await pool.query(
       `INSERT INTO ${table} (data, created_at, updated_at, deleted_at, sync_status, user_id)
        VALUES ($1, $2, $2, NULL, 'PENDING', $3)
@@ -190,6 +295,8 @@ router.patch('/:resource/:id', async (req, res, next) => {
   const now = Date.now();
 
   try {
+    await validateReferences(pool, req.params.resource, patch, userId);
+
     const result = await pool.query(
       `UPDATE ${table}
        SET data = COALESCE(data, '{}'::jsonb) || $3::jsonb,

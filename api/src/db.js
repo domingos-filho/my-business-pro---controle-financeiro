@@ -3,6 +3,16 @@ import pg from 'pg';
 const { Pool } = pg;
 
 const TABLES = ['customers', 'products', 'orders', 'transactions', 'categories'];
+const DEFAULT_SYSTEM_CATEGORIES = [
+  { name: 'Vendas', type: 'INCOME', color: '#4F46E5' },
+  { name: 'Outras Receitas', type: 'INCOME', color: '#10B981' },
+  { name: 'Materia-prima', type: 'EXPENSE', color: '#F59E0B' },
+  { name: 'Embalagens', type: 'EXPENSE', color: '#EC4899' },
+  { name: 'Frete', type: 'EXPENSE', color: '#3B82F6' },
+  { name: 'Marketing', type: 'EXPENSE', color: '#8B5CF6' },
+  { name: 'Operacional', type: 'EXPENSE', color: '#06B6D4' },
+  { name: 'Impostos e Taxas', type: 'EXPENSE', color: '#F43F5E' },
+];
 
 if (!process.env.DATABASE_URL) {
   throw new Error('DATABASE_URL is required for API startup.');
@@ -14,14 +24,26 @@ export const pool = new Pool({
 
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
-const toEntity = (row) => ({
-  id: row.id,
-  ...(row.data || {}),
-  createdAt: Number(row.created_at),
-  updatedAt: Number(row.updated_at),
-  deletedAt: row.deleted_at === null ? null : Number(row.deleted_at),
-  syncStatus: row.sync_status,
-});
+const toEntity = (row) => {
+  const data = { ...(row.data || {}) };
+  delete data.isSystem;
+  delete data.ownerUserId;
+
+  const entity = {
+    id: row.id,
+    ...data,
+    createdAt: Number(row.created_at),
+    updatedAt: Number(row.updated_at),
+    deletedAt: row.deleted_at === null ? null : Number(row.deleted_at),
+    syncStatus: row.sync_status,
+  };
+
+  if (Object.prototype.hasOwnProperty.call(row, 'is_system')) {
+    entity.isSystem = Boolean(row.is_system);
+  }
+
+  return entity;
+};
 
 export const rowToEntity = toEntity;
 
@@ -32,6 +54,8 @@ const stripMeta = (payload = {}) => {
   delete data.updatedAt;
   delete data.deletedAt;
   delete data.syncStatus;
+  delete data.isSystem;
+  delete data.ownerUserId;
   return data;
 };
 
@@ -165,6 +189,56 @@ END
 $$;
 `;
 
+const createCategorySystemColumnSql = `
+  ALTER TABLE categories
+  ADD COLUMN IF NOT EXISTS is_system BOOLEAN NOT NULL DEFAULT FALSE;
+`;
+
+const createCategorySystemIndexesSql = [
+  'CREATE INDEX IF NOT EXISTS categories_is_system_idx ON categories (is_system);',
+  'CREATE INDEX IF NOT EXISTS categories_is_system_deleted_at_idx ON categories (is_system, deleted_at);',
+  `CREATE UNIQUE INDEX IF NOT EXISTS categories_system_name_type_unique_idx
+   ON categories ((lower(coalesce(data->>'name', ''))), (coalesce(data->>'type', '')))
+   WHERE is_system = TRUE;`,
+];
+
+const seedSystemCategories = async (client) => {
+  const now = Date.now();
+
+  for (const category of DEFAULT_SYSTEM_CATEGORIES) {
+    const existing = await client.query(
+      `SELECT id
+       FROM categories
+       WHERE is_system = TRUE
+         AND lower(coalesce(data->>'name', '')) = lower($1)
+         AND coalesce(data->>'type', '') = $2
+       LIMIT 1`,
+      [category.name, category.type]
+    );
+
+    if (existing.rowCount) {
+      await client.query(
+        `UPDATE categories
+         SET data = $2::jsonb,
+             user_id = NULL,
+             is_system = TRUE,
+             deleted_at = NULL,
+             updated_at = $3,
+             sync_status = 'SYNCED'
+         WHERE id = $1`,
+        [existing.rows[0].id, category, now]
+      );
+      continue;
+    }
+
+    await client.query(
+      `INSERT INTO categories (data, created_at, updated_at, deleted_at, sync_status, user_id, is_system)
+       VALUES ($1, $2, $2, NULL, 'SYNCED', NULL, TRUE)`,
+      [category, now]
+    );
+  }
+};
+
 const ensureSchema = async () => {
   const client = await pool.connect();
   try {
@@ -204,6 +278,12 @@ const ensureSchema = async () => {
         await client.query(stmt);
       }
     }
+
+    await client.query(createCategorySystemColumnSql);
+    for (const stmt of createCategorySystemIndexesSql) {
+      await client.query(stmt);
+    }
+    await seedSystemCategories(client);
   } finally {
     client.release();
   }

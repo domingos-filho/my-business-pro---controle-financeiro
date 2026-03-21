@@ -37,6 +37,19 @@ router.post('/actions/create', async (req, res, next) => {
   try {
     await client.query('BEGIN');
 
+    const customerResult = await client.query(
+      `SELECT id FROM customers
+       WHERE id = $1
+         AND user_id = $2
+         AND deleted_at IS NULL
+       LIMIT 1`,
+      [customerId, userId]
+    );
+
+    if (!customerResult.rowCount) {
+      throw buildHttpError(404, 'Cliente nao encontrado');
+    }
+
     const productResult = await client.query(
       `SELECT * FROM products
        WHERE id = $1
@@ -133,12 +146,13 @@ router.post('/actions/mark-paid', async (req, res, next) => {
 
     const categoryResult = await client.query(
       `SELECT * FROM categories
-       WHERE user_id = $1
-         AND deleted_at IS NULL
+       WHERE deleted_at IS NULL
          AND lower(coalesce(data->>'name', '')) = 'vendas'
          AND coalesce(data->>'type', '') = 'INCOME'
+         AND (user_id = $1 OR is_system = TRUE)
+       ORDER BY CASE WHEN user_id = $1 THEN 0 ELSE 1 END, id ASC
        LIMIT 1
-       FOR UPDATE`,
+      `,
       [userId]
     );
 

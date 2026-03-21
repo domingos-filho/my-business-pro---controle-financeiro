@@ -27,6 +27,7 @@ export interface Category extends BaseEntity {
   name: string;
   type: TransactionType;
   color?: string;
+  isSystem?: boolean;
 }
 
 export interface Customer extends BaseEntity {
