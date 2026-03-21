@@ -66,6 +66,14 @@ const createUsersTableSql = `
 const createUserIndexesSql = [
   'CREATE UNIQUE INDEX IF NOT EXISTS users_email_unique_idx ON users (lower(email));',
   'CREATE INDEX IF NOT EXISTS users_is_active_idx ON users (is_active);',
+  'CREATE INDEX IF NOT EXISTS users_locked_until_idx ON users (locked_until);',
+];
+
+const ensureUserSecurityColumnsSql = [
+  'ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified BOOLEAN NOT NULL DEFAULT FALSE;',
+  'ALTER TABLE users ADD COLUMN IF NOT EXISTS password_updated_at BIGINT NULL;',
+  'ALTER TABLE users ADD COLUMN IF NOT EXISTS failed_login_attempts INTEGER NOT NULL DEFAULT 0;',
+  'ALTER TABLE users ADD COLUMN IF NOT EXISTS locked_until BIGINT NULL;',
 ];
 
 const createSessionsTableSql = `
@@ -85,6 +93,25 @@ const createSessionIndexesSql = [
   'CREATE UNIQUE INDEX IF NOT EXISTS sessions_refresh_token_hash_unique_idx ON sessions (refresh_token_hash);',
   'CREATE INDEX IF NOT EXISTS sessions_user_id_idx ON sessions (user_id);',
   'CREATE INDEX IF NOT EXISTS sessions_expires_at_idx ON sessions (expires_at);',
+];
+
+const createPasswordResetTokensTableSql = `
+  CREATE TABLE IF NOT EXISTS password_reset_tokens (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    token_hash TEXT NOT NULL,
+    expires_at BIGINT NOT NULL,
+    created_at BIGINT NOT NULL,
+    used_at BIGINT NULL,
+    requested_ip TEXT NULL,
+    requested_user_agent TEXT NULL
+  );
+`;
+
+const createPasswordResetTokenIndexesSql = [
+  'CREATE UNIQUE INDEX IF NOT EXISTS password_reset_tokens_token_hash_unique_idx ON password_reset_tokens (token_hash);',
+  'CREATE INDEX IF NOT EXISTS password_reset_tokens_user_id_idx ON password_reset_tokens (user_id);',
+  'CREATE INDEX IF NOT EXISTS password_reset_tokens_expires_at_idx ON password_reset_tokens (expires_at);',
 ];
 
 const createIndexesSql = (table) => [
@@ -124,12 +151,20 @@ const ensureSchema = async () => {
   const client = await pool.connect();
   try {
     await client.query(createUsersTableSql);
+    for (const stmt of ensureUserSecurityColumnsSql) {
+      await client.query(stmt);
+    }
     for (const stmt of createUserIndexesSql) {
       await client.query(stmt);
     }
 
     await client.query(createSessionsTableSql);
     for (const stmt of createSessionIndexesSql) {
+      await client.query(stmt);
+    }
+
+    await client.query(createPasswordResetTokensTableSql);
+    for (const stmt of createPasswordResetTokenIndexesSql) {
       await client.query(stmt);
     }
 

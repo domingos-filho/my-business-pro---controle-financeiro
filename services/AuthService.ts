@@ -7,65 +7,95 @@ export interface User {
   name: string;
   avatar?: string | null;
   provider?: 'email' | 'google' | 'apple';
+  emailVerified?: boolean;
 }
 
-const SESSION_STORAGE_KEY = 'auth_session';
+export interface SessionInfo {
+  id: number;
+  userAgent?: string | null;
+  ipAddress?: string | null;
+  createdAt: number;
+  expiresAt: number;
+  revokedAt: number | null;
+  current: boolean;
+  active: boolean;
+}
 
 export const AuthService = {
   async loginWithEmail(email: string, password: string): Promise<User> {
-    const user = await ApiClient.request<User>('/auth/login', {
+    return ApiClient.request<User>('/auth/login', {
       method: 'POST',
       body: JSON.stringify({ email, password }),
     });
-    localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(user));
-    return user;
   },
 
   async loginWithSocial(provider: 'google' | 'apple'): Promise<User> {
-    const user = await ApiClient.request<User>('/auth/social', {
+    return ApiClient.request<User>('/auth/social', {
       method: 'POST',
       body: JSON.stringify({ provider }),
     });
-    localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(user));
-    return user;
   },
 
   async register(name: string, email: string, password: string): Promise<User> {
-    const user = await ApiClient.request<User>('/auth/register', {
+    return ApiClient.request<User>('/auth/register', {
       method: 'POST',
       body: JSON.stringify({ name, email, password }),
     });
-    localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(user));
-    return user;
   },
 
   async logout() {
-    try {
-      await ApiClient.request<{ success: boolean }>('/auth/logout', { method: 'POST' });
-    } finally {
-      localStorage.removeItem(SESSION_STORAGE_KEY);
-    }
+    await ApiClient.request<{ success: boolean }>('/auth/logout', { method: 'POST' });
+  },
+
+  async logoutAll() {
+    await ApiClient.request<{ success: boolean }>('/auth/logout-all', { method: 'POST' });
+  },
+
+  async requestPasswordReset(email: string): Promise<{ success: boolean; message: string; debugResetToken?: string }> {
+    return ApiClient.request('/auth/request-password-reset', {
+      method: 'POST',
+      body: JSON.stringify({ email }),
+    });
+  },
+
+  async resetPassword(token: string, password: string): Promise<{ success: boolean }> {
+    return ApiClient.request('/auth/reset-password', {
+      method: 'POST',
+      body: JSON.stringify({ token, password }),
+    });
+  },
+
+  async changePassword(currentPassword: string, newPassword: string): Promise<{ success: boolean; message: string }> {
+    return ApiClient.request('/auth/change-password', {
+      method: 'POST',
+      body: JSON.stringify({ currentPassword, newPassword }),
+    });
+  },
+
+  async listSessions(): Promise<SessionInfo[]> {
+    return ApiClient.request('/auth/sessions');
+  },
+
+  async revokeSession(sessionId: number): Promise<void> {
+    await ApiClient.request(`/auth/sessions/${sessionId}`, {
+      method: 'DELETE',
+    });
+  },
+
+  async claimLegacyData(): Promise<{ success: boolean; claimed: number; perTable: Record<string, number> }> {
+    return ApiClient.request('/auth/claim-legacy-data', {
+      method: 'POST',
+    });
   },
 
   getCurrentUser(): User | null {
-    const session = localStorage.getItem(SESSION_STORAGE_KEY);
-    if (!session) return null;
-
-    try {
-      return JSON.parse(session) as User;
-    } catch (_error) {
-      localStorage.removeItem(SESSION_STORAGE_KEY);
-      return null;
-    }
+    return null;
   },
 
   async restoreSession(): Promise<User | null> {
     try {
-      const user = await ApiClient.request<User>('/auth/me');
-      localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(user));
-      return user;
+      return await ApiClient.request<User>('/auth/me');
     } catch (_error) {
-      localStorage.removeItem(SESSION_STORAGE_KEY);
       return null;
     }
   },

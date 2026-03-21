@@ -9,8 +9,30 @@ import { requireAuth } from './middleware/auth.js';
 
 const app = express();
 const PORT = Number(process.env.PORT || 4000);
+const corsAllowedOrigins = new Set(
+  String(process.env.CORS_ALLOWED_ORIGINS || '')
+    .split(',')
+    .map((origin) => origin.trim())
+    .filter(Boolean)
+);
 
 app.set('trust proxy', 1);
+app.use((req, res, next) => {
+  const origin = req.get('origin');
+  if (!origin) return next();
+
+  const host = (req.get('x-forwarded-host') || req.get('host') || '').trim();
+  const forwardedProto = (req.get('x-forwarded-proto') || req.protocol || 'http')
+    .split(',')[0]
+    .trim();
+  const sameOrigin = host ? `${forwardedProto}://${host}` : null;
+
+  if (origin === sameOrigin || corsAllowedOrigins.has(origin)) {
+    return next();
+  }
+
+  return res.status(403).json({ error: 'Origin not allowed' });
+});
 app.use(cors({ origin: true, credentials: true }));
 app.use(cookieParser());
 app.use(express.json({ limit: '1mb' }));

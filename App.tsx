@@ -13,7 +13,7 @@ import { SyncService, SyncStats } from './services/SyncService';
 import { AuthService, User } from './services/AuthService';
 
 const App: React.FC = () => {
-  const [user, setUser] = useState<User | null>(AuthService.getCurrentUser());
+  const [user, setUser] = useState<User | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [currentView, setView] = useState('dashboard');
   const [syncStats, setSyncStats] = useState<SyncStats>({ pendingCount: 0 });
