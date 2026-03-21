@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   ArrowRightIcon,
   BoxIcon,
@@ -6,40 +6,223 @@ import {
   ChartUpIcon,
   RobotIcon,
   SparklesIcon,
+  XIcon,
 } from './AppIcons';
 import { ProductRepo } from '../repositories';
 import { AdvisorService } from '../services/AdvisorService';
-import { AiBusinessInsight, AiProductAnalysis, Product } from '../types';
+import {
+  AiBusinessInsight,
+  Product,
+  StoredAiProductAnalysis,
+} from '../types';
+
+const formatDateTime = (timestamp: number) =>
+  new Date(timestamp).toLocaleString('pt-BR', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+
+const parseProductId = (value: string) => {
+  const parsed = Number.parseInt(value, 10);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : 0;
+};
+
+const AnalysisDetails: React.FC<{ item: StoredAiProductAnalysis }> = ({ item }) => {
+  const { analysis } = item;
+
+  return (
+    <div className="space-y-5">
+      <div className="bg-slate-50 border border-slate-100 rounded-2xl p-5">
+        <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+          <div>
+            <div className="text-[11px] font-black uppercase tracking-widest text-slate-400 mb-2">
+              Produto analisado
+            </div>
+            <h4 className="text-xl font-black text-slate-950">{item.productName}</h4>
+          </div>
+          <div className="text-sm font-medium text-slate-400">
+            Atualizado em {formatDateTime(item.updatedAt)}
+          </div>
+        </div>
+        <p className="text-slate-600 mt-3 leading-7">{analysis.positioningSummary}</p>
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-2">
+        <div className="bg-white border border-slate-100 rounded-2xl p-5">
+          <h5 className="text-sm font-black uppercase tracking-widest text-slate-400 mb-3">
+            Preco final sugerido
+          </h5>
+          <p className="text-slate-900 font-black text-lg">{analysis.idealPriceRange}</p>
+        </div>
+        <div className="bg-white border border-slate-100 rounded-2xl p-5">
+          <h5 className="text-sm font-black uppercase tracking-widest text-slate-400 mb-3">
+            Publico ideal
+          </h5>
+          <p className="text-slate-700 leading-7">{analysis.targetAudience}</p>
+        </div>
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-2">
+        <div className="bg-white border border-slate-100 rounded-2xl p-5">
+          <h5 className="text-sm font-black uppercase tracking-widest text-slate-400 mb-3">
+            Melhores canais de venda
+          </h5>
+          <ul className="space-y-3">
+            {analysis.bestSalesChannels.map((channel, index) => (
+              <li key={`${channel}-${index}`} className="flex items-start gap-3 text-slate-700">
+                <span className="mt-1 w-2 h-2 rounded-full bg-indigo-500 shrink-0"></span>
+                <span>{channel}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+
+        <div className="bg-white border border-slate-100 rounded-2xl p-5">
+          <h5 className="text-sm font-black uppercase tracking-widest text-slate-400 mb-3">
+            Ganchos de marketing
+          </h5>
+          <ul className="space-y-3">
+            {analysis.marketingHighlights.map((itemText, index) => (
+              <li key={`${itemText}-${index}`} className="flex items-start gap-3 text-slate-700">
+                <ArrowRightIcon className="w-4 h-4 mt-0.5 text-emerald-500 shrink-0" />
+                <span>{itemText}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      </div>
+
+      <div className="bg-white border border-slate-100 rounded-2xl p-5">
+        <h5 className="text-sm font-black uppercase tracking-widest text-slate-400 mb-4">
+          Materia-prima sugerida
+        </h5>
+        <div className="space-y-3">
+          {analysis.suggestedMaterials.length > 0 ? (
+            analysis.suggestedMaterials.map((material, index) => (
+              <div
+                key={`${material.name}-${index}`}
+                className="rounded-2xl border border-slate-100 bg-slate-50 px-4 py-4"
+              >
+                <div className="flex flex-col gap-1 md:flex-row md:items-center md:justify-between">
+                  <strong className="text-slate-950">{material.name}</strong>
+                  <span className="text-sm font-bold text-indigo-600">
+                    {material.estimatedPriceRange}
+                  </span>
+                </div>
+                <p className="text-slate-600 mt-2">{material.purpose}</p>
+                <p className="text-sm text-slate-400 mt-1">{material.notes}</p>
+              </div>
+            ))
+          ) : (
+            <p className="text-slate-400">A IA nao retornou materiais para este produto.</p>
+          )}
+        </div>
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-2">
+        <div className="bg-white border border-slate-100 rounded-2xl p-5">
+          <h5 className="text-sm font-black uppercase tracking-widest text-slate-400 mb-3">
+            Proximos passos
+          </h5>
+          <ul className="space-y-3">
+            {analysis.nextSteps.map((step, index) => (
+              <li key={`${step}-${index}`} className="flex items-start gap-3 text-slate-700">
+                <span className="mt-1 w-2 h-2 rounded-full bg-slate-900 shrink-0"></span>
+                <span>{step}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+
+        <div className="bg-amber-50 border border-amber-200 rounded-2xl p-5">
+          <h5 className="text-sm font-black uppercase tracking-widest text-amber-700 mb-3">
+            Premissas e alertas
+          </h5>
+          <ul className="space-y-3">
+            {analysis.warnings.length > 0 ? (
+              analysis.warnings.map((warning, index) => (
+                <li key={`${warning}-${index}`} className="text-amber-800">
+                  {warning}
+                </li>
+              ))
+            ) : (
+              <li className="text-amber-800">Nenhum alerta adicional nesta leitura.</li>
+            )}
+          </ul>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 export const Advisor: React.FC = () => {
   const [products, setProducts] = useState<Product[]>([]);
   const [selectedProductId, setSelectedProductId] = useState<number>(0);
+  const [selectedSavedProductId, setSelectedSavedProductId] = useState<number>(0);
   const [overviewInsight, setOverviewInsight] = useState<AiBusinessInsight | null>(null);
-  const [productAnalysis, setProductAnalysis] = useState<AiProductAnalysis | null>(null);
+  const [latestProductAnalysis, setLatestProductAnalysis] = useState<StoredAiProductAnalysis | null>(null);
+  const [savedAnalyses, setSavedAnalyses] = useState<StoredAiProductAnalysis[]>([]);
+  const [modalAnalysis, setModalAnalysis] = useState<StoredAiProductAnalysis | null>(null);
   const [loadingOverview, setLoadingOverview] = useState(false);
   const [loadingProduct, setLoadingProduct] = useState(false);
+  const [loadingSavedAnalyses, setLoadingSavedAnalyses] = useState(false);
   const [error, setError] = useState('');
 
+  const savedAnalysisLookup = useMemo(
+    () =>
+      new Map(savedAnalyses.map((item) => [item.productId, item])),
+    [savedAnalyses],
+  );
+
+  const loadSavedAnalyses = async () => {
+    setLoadingSavedAnalyses(true);
+    try {
+      const items = await AdvisorService.getSavedProductAnalyses();
+      setSavedAnalyses(items);
+
+      if (items.length > 0) {
+        setSelectedSavedProductId((current) =>
+          current && items.some((item) => item.productId === current) ? current : items[0].productId,
+        );
+      } else {
+        setSelectedSavedProductId(0);
+      }
+    } catch (loadError: any) {
+      setError(loadError?.message || 'Nao foi possivel carregar as analises salvas.');
+    } finally {
+      setLoadingSavedAnalyses(false);
+    }
+  };
+
   useEffect(() => {
-    const loadProducts = async () => {
+    const loadInitialData = async () => {
       try {
-        const list = await ProductRepo.getAllActive();
-        setProducts(list);
-        if (list.length > 0) {
-          setSelectedProductId(list[0].id || 0);
+        const [productList] = await Promise.all([ProductRepo.getAllActive(), loadSavedAnalyses()]);
+        setProducts(productList);
+        if (productList.length > 0) {
+          setSelectedProductId(productList[0].id || 0);
         }
       } catch (loadError: any) {
-        setError(loadError?.message || 'Nao foi possivel carregar seus produtos.');
+        setError(loadError?.message || 'Nao foi possivel carregar os dados da IA.');
       }
     };
 
-    loadProducts();
+    loadInitialData();
   }, []);
 
-  const parseProductId = (value: string) => {
-    const parsed = Number.parseInt(value, 10);
-    return Number.isInteger(parsed) && parsed > 0 ? parsed : 0;
-  };
+  useEffect(() => {
+    if (!modalAnalysis) return undefined;
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [modalAnalysis]);
 
   const handleOverviewInsight = async () => {
     setError('');
@@ -63,8 +246,13 @@ export const Advisor: React.FC = () => {
     setError('');
     setLoadingProduct(true);
     try {
-      const analysis = await AdvisorService.analyzeProduct(selectedProductId);
-      setProductAnalysis(analysis);
+      const storedAnalysis = await AdvisorService.analyzeProduct(selectedProductId);
+      setLatestProductAnalysis(storedAnalysis);
+      setSelectedSavedProductId(storedAnalysis.productId);
+      setSavedAnalyses((current) => {
+        const next = current.filter((item) => item.productId !== storedAnalysis.productId);
+        return [storedAnalysis, ...next].sort((left, right) => right.updatedAt - left.updatedAt);
+      });
     } catch (requestError: any) {
       setError(requestError?.message || 'Nao foi possivel analisar o produto agora.');
     } finally {
@@ -72,270 +260,291 @@ export const Advisor: React.FC = () => {
     }
   };
 
+  const handleOpenSavedAnalysis = () => {
+    if (!selectedSavedProductId) {
+      setError('Selecione um produto com analise salva.');
+      return;
+    }
+
+    const storedAnalysis = savedAnalysisLookup.get(selectedSavedProductId);
+    if (!storedAnalysis) {
+      setError('A analise selecionada nao foi encontrada.');
+      return;
+    }
+
+    setModalAnalysis(storedAnalysis);
+  };
+
   return (
-    <div className="space-y-6 animate-fadeIn">
-      <div className="bg-slate-950 text-white p-8 rounded-[2.5rem] shadow-2xl overflow-hidden relative">
-        <div className="relative z-10 max-w-2xl">
-          <span className="text-[11px] font-black uppercase tracking-[0.25em] text-indigo-300/70">
-            MyBizPro AI
-          </span>
-          <h2 className="text-3xl md:text-4xl font-black mt-3 mb-3 tracking-tight">
-            Inteligencia comercial para vender melhor.
-          </h2>
-          <p className="text-slate-300 md:text-lg">
-            Gere insights do negocio e peça uma leitura de marketing para qualquer produto do seu catalogo.
-          </p>
-        </div>
-        <div className="absolute top-0 right-0 p-6 opacity-15 pointer-events-none">
-          <RobotIcon className="w-28 h-28 md:w-36 md:h-36" />
-        </div>
-      </div>
-
-      {error && (
-        <div className="bg-rose-50 border border-rose-200 text-rose-700 px-5 py-4 rounded-2xl font-medium">
-          {error}
-        </div>
-      )}
-
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-        <section className="bg-white border border-slate-100 shadow-sm rounded-[2rem] p-6 md:p-8 space-y-5">
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <div className="inline-flex items-center gap-2 text-[11px] font-black uppercase tracking-[0.2em] text-indigo-500">
-                <ChartUpIcon className="w-4 h-4" />
-                <span>Panorama do negocio</span>
-              </div>
-              <h3 className="text-2xl font-black text-slate-950 mt-2">Insight geral</h3>
-              <p className="text-slate-500 mt-2">
-                A IA resume seu momento atual e sugere acoes praticas para melhorar operacao e margem.
-              </p>
-            </div>
-          </div>
-
-          <button
-            onClick={handleOverviewInsight}
-            disabled={loadingOverview}
-            className="inline-flex items-center gap-2 bg-indigo-600 text-white px-5 py-3 rounded-2xl font-bold shadow-lg shadow-indigo-100 hover:bg-indigo-700 transition-all active:scale-95 disabled:opacity-60"
-          >
-            <SparklesIcon className="w-4 h-4" />
-            <span>{loadingOverview ? 'Gerando insight...' : 'Gerar insight agora'}</span>
-          </button>
-
-          {overviewInsight && (
-            <div className="space-y-5 pt-2">
-              <div className="bg-slate-50 border border-slate-100 rounded-2xl p-5">
-                <div className="flex items-center gap-2 text-slate-950 font-black mb-3">
-                  <BulbIcon className="w-4 h-4 text-indigo-500" />
-                  <span>Resumo executivo</span>
-                </div>
-                <p className="text-slate-600 leading-7">{overviewInsight.summary}</p>
-              </div>
-
-              <div className="grid gap-4 md:grid-cols-2">
-                <div className="bg-white border border-slate-100 rounded-2xl p-5">
-                  <h4 className="text-sm font-black uppercase tracking-widest text-slate-400 mb-3">
-                    Recomendacoes
-                  </h4>
-                  <ul className="space-y-3">
-                    {overviewInsight.recommendations.map((item, index) => (
-                      <li key={`${item}-${index}`} className="flex items-start gap-3 text-slate-700">
-                        <span className="mt-1 w-2 h-2 rounded-full bg-indigo-500 shrink-0"></span>
-                        <span>{item}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-
-                <div className="bg-white border border-slate-100 rounded-2xl p-5">
-                  <h4 className="text-sm font-black uppercase tracking-widest text-slate-400 mb-3">
-                    Oportunidades
-                  </h4>
-                  <ul className="space-y-3">
-                    {overviewInsight.opportunities.length > 0 ? (
-                      overviewInsight.opportunities.map((item, index) => (
-                        <li key={`${item}-${index}`} className="flex items-start gap-3 text-slate-700">
-                          <ArrowRightIcon className="w-4 h-4 mt-0.5 text-emerald-500 shrink-0" />
-                          <span>{item}</span>
-                        </li>
-                      ))
-                    ) : (
-                      <li className="text-slate-400">Sem oportunidades adicionais retornadas nesta analise.</li>
-                    )}
-                  </ul>
-                </div>
-              </div>
-            </div>
-          )}
-        </section>
-
-        <section className="bg-white border border-slate-100 shadow-sm rounded-[2rem] p-6 md:p-8 space-y-5">
-          <div>
-            <div className="inline-flex items-center gap-2 text-[11px] font-black uppercase tracking-[0.2em] text-indigo-500">
-              <BoxIcon className="w-4 h-4" />
-              <span>Leitura por produto</span>
-            </div>
-            <h3 className="text-2xl font-black text-slate-950 mt-2">Analise de marketing</h3>
-            <p className="text-slate-500 mt-2">
-              Selecione um item cadastrado para receber orientacao de preco, publico, canais e materia-prima.
+    <>
+      <div className="space-y-6 animate-fadeIn">
+        <div className="bg-slate-950 text-white p-8 rounded-[2.5rem] shadow-2xl overflow-hidden relative">
+          <div className="relative z-10 max-w-2xl">
+            <span className="text-[11px] font-black uppercase tracking-[0.25em] text-indigo-300/70">
+              MyBizPro AI
+            </span>
+            <h2 className="text-3xl md:text-4xl font-black mt-3 mb-3 tracking-tight">
+              Inteligencia comercial para vender melhor.
+            </h2>
+            <p className="text-slate-300 md:text-lg">
+              Gere insights do negocio, salve leituras por produto e consulte essas analises sempre que precisar.
             </p>
           </div>
+          <div className="absolute top-0 right-0 p-6 opacity-15 pointer-events-none">
+            <RobotIcon className="w-28 h-28 md:w-36 md:h-36" />
+          </div>
+        </div>
 
-          <div className="space-y-4">
-            <div>
-              <label className="block text-[11px] font-black text-slate-400 uppercase tracking-widest ml-1 mb-2">
-                Produto
-              </label>
-              <select
-                value={selectedProductId}
-                onChange={(event) => setSelectedProductId(parseProductId(event.target.value))}
-                className="w-full rounded-2xl border border-slate-200 bg-white p-3.5 text-slate-900 font-medium outline-none focus:ring-2 focus:ring-indigo-500"
-              >
-                {products.length === 0 ? (
-                  <option value="0">Nenhum produto cadastrado</option>
-                ) : (
-                  products.map((product) => (
-                    <option key={product.id} value={product.id}>
-                      {product.name}
-                    </option>
-                  ))
-                )}
-              </select>
+        {error && (
+          <div className="bg-rose-50 border border-rose-200 text-rose-700 px-5 py-4 rounded-2xl font-medium">
+            {error}
+          </div>
+        )}
+
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+          <section className="bg-white border border-slate-100 shadow-sm rounded-[2rem] p-6 md:p-8 space-y-5">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <div className="inline-flex items-center gap-2 text-[11px] font-black uppercase tracking-[0.2em] text-indigo-500">
+                  <ChartUpIcon className="w-4 h-4" />
+                  <span>Panorama do negocio</span>
+                </div>
+                <h3 className="text-2xl font-black text-slate-950 mt-2">Insight geral</h3>
+                <p className="text-slate-500 mt-2">
+                  A IA resume seu momento atual e sugere acoes praticas para melhorar operacao e margem.
+                </p>
+              </div>
             </div>
 
             <button
-              onClick={handleProductAnalysis}
-              disabled={loadingProduct || products.length === 0}
-              className="inline-flex items-center gap-2 bg-slate-950 text-white px-5 py-3 rounded-2xl font-bold shadow-lg hover:bg-slate-800 transition-all active:scale-95 disabled:opacity-60"
+              onClick={handleOverviewInsight}
+              disabled={loadingOverview}
+              className="inline-flex items-center gap-2 bg-indigo-600 text-white px-5 py-3 rounded-2xl font-bold shadow-lg shadow-indigo-100 hover:bg-indigo-700 transition-all active:scale-95 disabled:opacity-60"
             >
               <SparklesIcon className="w-4 h-4" />
-              <span>{loadingProduct ? 'Analisando produto...' : 'Analisar produto com IA'}</span>
+              <span>{loadingOverview ? 'Gerando insight...' : 'Gerar insight agora'}</span>
             </button>
+
+            {overviewInsight && (
+              <div className="space-y-5 pt-2">
+                <div className="bg-slate-50 border border-slate-100 rounded-2xl p-5">
+                  <div className="flex items-center gap-2 text-slate-950 font-black mb-3">
+                    <BulbIcon className="w-4 h-4 text-indigo-500" />
+                    <span>Resumo executivo</span>
+                  </div>
+                  <p className="text-slate-600 leading-7">{overviewInsight.summary}</p>
+                </div>
+
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="bg-white border border-slate-100 rounded-2xl p-5">
+                    <h4 className="text-sm font-black uppercase tracking-widest text-slate-400 mb-3">
+                      Recomendacoes
+                    </h4>
+                    <ul className="space-y-3">
+                      {overviewInsight.recommendations.map((item, index) => (
+                        <li key={`${item}-${index}`} className="flex items-start gap-3 text-slate-700">
+                          <span className="mt-1 w-2 h-2 rounded-full bg-indigo-500 shrink-0"></span>
+                          <span>{item}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+
+                  <div className="bg-white border border-slate-100 rounded-2xl p-5">
+                    <h4 className="text-sm font-black uppercase tracking-widest text-slate-400 mb-3">
+                      Oportunidades
+                    </h4>
+                    <ul className="space-y-3">
+                      {overviewInsight.opportunities.length > 0 ? (
+                        overviewInsight.opportunities.map((item, index) => (
+                          <li key={`${item}-${index}`} className="flex items-start gap-3 text-slate-700">
+                            <ArrowRightIcon className="w-4 h-4 mt-0.5 text-emerald-500 shrink-0" />
+                            <span>{item}</span>
+                          </li>
+                        ))
+                      ) : (
+                        <li className="text-slate-400">
+                          Sem oportunidades adicionais retornadas nesta analise.
+                        </li>
+                      )}
+                    </ul>
+                  </div>
+                </div>
+              </div>
+            )}
+          </section>
+
+          <section className="bg-white border border-slate-100 shadow-sm rounded-[2rem] p-6 md:p-8 space-y-5">
+            <div>
+              <div className="inline-flex items-center gap-2 text-[11px] font-black uppercase tracking-[0.2em] text-indigo-500">
+                <BoxIcon className="w-4 h-4" />
+                <span>Leitura por produto</span>
+              </div>
+              <h3 className="text-2xl font-black text-slate-950 mt-2">Analise de marketing</h3>
+              <p className="text-slate-500 mt-2">
+                Gere uma nova analise com IA ou abra uma leitura salva de um produto ja analisado.
+              </p>
+            </div>
+
+            <div className="grid gap-5 lg:grid-cols-2">
+              <div className="space-y-4 rounded-2xl border border-slate-100 bg-slate-50/70 p-5">
+                <div>
+                  <h4 className="text-sm font-black uppercase tracking-widest text-slate-400">
+                    Nova analise
+                  </h4>
+                  <p className="text-sm text-slate-500 mt-2">
+                    Se rodar novamente para o mesmo produto, a analise anterior sera substituida pela nova.
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-black text-slate-400 uppercase tracking-widest ml-1 mb-2">
+                    Produto
+                  </label>
+                  <select
+                    value={selectedProductId}
+                    onChange={(event) => setSelectedProductId(parseProductId(event.target.value))}
+                    className="w-full rounded-2xl border border-slate-200 bg-white p-3.5 text-slate-900 font-medium outline-none focus:ring-2 focus:ring-indigo-500"
+                  >
+                    {products.length === 0 ? (
+                      <option value="0">Nenhum produto cadastrado</option>
+                    ) : (
+                      products.map((product) => (
+                        <option key={product.id} value={product.id}>
+                          {product.name}
+                        </option>
+                      ))
+                    )}
+                  </select>
+                </div>
+
+                <button
+                  onClick={handleProductAnalysis}
+                  disabled={loadingProduct || products.length === 0}
+                  className="inline-flex items-center gap-2 bg-slate-950 text-white px-5 py-3 rounded-2xl font-bold shadow-lg hover:bg-slate-800 transition-all active:scale-95 disabled:opacity-60"
+                >
+                  <SparklesIcon className="w-4 h-4" />
+                  <span>{loadingProduct ? 'Analisando produto...' : 'Analisar produto com IA'}</span>
+                </button>
+              </div>
+
+              <div className="space-y-4 rounded-2xl border border-slate-100 bg-slate-50/70 p-5">
+                <div>
+                  <div className="flex items-center justify-between gap-3">
+                    <h4 className="text-sm font-black uppercase tracking-widest text-slate-400">
+                      Analises salvas
+                    </h4>
+                    <span className="text-xs font-bold text-slate-400">
+                      {loadingSavedAnalyses ? 'Carregando...' : `${savedAnalyses.length} salvas`}
+                    </span>
+                  </div>
+                  <p className="text-sm text-slate-500 mt-2">
+                    Selecione um produto que ja possui analise para abrir a leitura em destaque.
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-black text-slate-400 uppercase tracking-widest ml-1 mb-2">
+                    Produto com analise
+                  </label>
+                  <select
+                    value={selectedSavedProductId}
+                    onChange={(event) => setSelectedSavedProductId(parseProductId(event.target.value))}
+                    className="w-full rounded-2xl border border-slate-200 bg-white p-3.5 text-slate-900 font-medium outline-none focus:ring-2 focus:ring-indigo-500"
+                    disabled={savedAnalyses.length === 0}
+                  >
+                    {savedAnalyses.length === 0 ? (
+                      <option value="0">Nenhuma analise salva ainda</option>
+                    ) : (
+                      savedAnalyses.map((item) => (
+                        <option key={item.productId} value={item.productId}>
+                          {item.productName}
+                        </option>
+                      ))
+                    )}
+                  </select>
+                </div>
+
+                <button
+                  onClick={handleOpenSavedAnalysis}
+                  disabled={savedAnalyses.length === 0}
+                  className="inline-flex items-center gap-2 bg-white border border-slate-200 text-slate-900 px-5 py-3 rounded-2xl font-bold shadow-sm hover:border-indigo-300 hover:text-indigo-600 transition-all active:scale-95 disabled:opacity-60"
+                >
+                  <ArrowRightIcon className="w-4 h-4" />
+                  <span>Ver analise salva</span>
+                </button>
+              </div>
+            </div>
 
             {products.length === 0 && (
               <p className="text-sm text-slate-400">
                 Cadastre pelo menos um produto para usar esta analise.
               </p>
             )}
-          </div>
 
-          {productAnalysis && (
-            <div className="space-y-5 pt-2">
-              <div className="bg-slate-50 border border-slate-100 rounded-2xl p-5">
-                <div className="text-[11px] font-black uppercase tracking-widest text-slate-400 mb-2">
-                  Produto analisado
+            {latestProductAnalysis && (
+              <div className="space-y-5 pt-2">
+                <div className="flex items-center justify-between gap-4">
+                  <div>
+                    <div className="inline-flex items-center gap-2 text-[11px] font-black uppercase tracking-[0.2em] text-emerald-600">
+                      <SparklesIcon className="w-4 h-4" />
+                      <span>Ultima analise gerada</span>
+                    </div>
+                    <p className="text-sm text-slate-500 mt-2">
+                      Esta leitura ja foi salva e pode ser reaberta depois em analises salvas.
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => setModalAnalysis(latestProductAnalysis)}
+                    className="inline-flex items-center gap-2 bg-slate-950 text-white px-4 py-2.5 rounded-2xl font-bold shadow-lg hover:bg-slate-800 transition-all active:scale-95"
+                  >
+                    <ArrowRightIcon className="w-4 h-4" />
+                    <span>Abrir grande</span>
+                  </button>
                 </div>
-                <h4 className="text-xl font-black text-slate-950">{productAnalysis.productName}</h4>
-                <p className="text-slate-600 mt-3 leading-7">{productAnalysis.positioningSummary}</p>
+
+                <AnalysisDetails item={latestProductAnalysis} />
+              </div>
+            )}
+          </section>
+        </div>
+      </div>
+
+      {modalAnalysis && (
+        <div
+          className="fixed inset-0 z-[200] bg-slate-950/45 backdrop-blur-md flex items-center justify-center p-4"
+          onClick={() => setModalAnalysis(null)}
+        >
+          <div
+            className="w-[80vw] h-[80vh] max-w-6xl bg-white rounded-[2rem] shadow-2xl border border-slate-200 overflow-hidden"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="h-full flex flex-col">
+              <div className="flex items-center justify-between gap-4 px-6 py-5 border-b border-slate-100">
+                <div>
+                  <div className="text-[11px] font-black uppercase tracking-[0.2em] text-indigo-500">
+                    Analise salva
+                  </div>
+                  <h3 className="text-2xl font-black text-slate-950 mt-2">
+                    {modalAnalysis.productName}
+                  </h3>
+                </div>
+                <button
+                  onClick={() => setModalAnalysis(null)}
+                  className="w-11 h-11 rounded-2xl border border-slate-200 text-slate-500 hover:text-slate-950 hover:border-slate-300 transition-colors flex items-center justify-center"
+                  title="Fechar"
+                >
+                  <XIcon className="w-5 h-5" />
+                </button>
               </div>
 
-              <div className="grid gap-4 md:grid-cols-2">
-                <div className="bg-white border border-slate-100 rounded-2xl p-5">
-                  <h5 className="text-sm font-black uppercase tracking-widest text-slate-400 mb-3">
-                    Preco final sugerido
-                  </h5>
-                  <p className="text-slate-900 font-black text-lg">{productAnalysis.idealPriceRange}</p>
-                </div>
-                <div className="bg-white border border-slate-100 rounded-2xl p-5">
-                  <h5 className="text-sm font-black uppercase tracking-widest text-slate-400 mb-3">
-                    Publico ideal
-                  </h5>
-                  <p className="text-slate-700 leading-7">{productAnalysis.targetAudience}</p>
-                </div>
-              </div>
-
-              <div className="grid gap-4 md:grid-cols-2">
-                <div className="bg-white border border-slate-100 rounded-2xl p-5">
-                  <h5 className="text-sm font-black uppercase tracking-widest text-slate-400 mb-3">
-                    Melhores canais de venda
-                  </h5>
-                  <ul className="space-y-3">
-                    {productAnalysis.bestSalesChannels.map((item, index) => (
-                      <li key={`${item}-${index}`} className="flex items-start gap-3 text-slate-700">
-                        <span className="mt-1 w-2 h-2 rounded-full bg-indigo-500 shrink-0"></span>
-                        <span>{item}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-
-                <div className="bg-white border border-slate-100 rounded-2xl p-5">
-                  <h5 className="text-sm font-black uppercase tracking-widest text-slate-400 mb-3">
-                    Ganchos de marketing
-                  </h5>
-                  <ul className="space-y-3">
-                    {productAnalysis.marketingHighlights.map((item, index) => (
-                      <li key={`${item}-${index}`} className="flex items-start gap-3 text-slate-700">
-                        <ArrowRightIcon className="w-4 h-4 mt-0.5 text-emerald-500 shrink-0" />
-                        <span>{item}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              </div>
-
-              <div className="bg-white border border-slate-100 rounded-2xl p-5">
-                <h5 className="text-sm font-black uppercase tracking-widest text-slate-400 mb-4">
-                  Materia-prima sugerida
-                </h5>
-                <div className="space-y-3">
-                  {productAnalysis.suggestedMaterials.length > 0 ? (
-                    productAnalysis.suggestedMaterials.map((material, index) => (
-                      <div
-                        key={`${material.name}-${index}`}
-                        className="rounded-2xl border border-slate-100 bg-slate-50 px-4 py-4"
-                      >
-                        <div className="flex flex-col gap-1 md:flex-row md:items-center md:justify-between">
-                          <strong className="text-slate-950">{material.name}</strong>
-                          <span className="text-sm font-bold text-indigo-600">
-                            {material.estimatedPriceRange}
-                          </span>
-                        </div>
-                        <p className="text-slate-600 mt-2">{material.purpose}</p>
-                        <p className="text-sm text-slate-400 mt-1">{material.notes}</p>
-                      </div>
-                    ))
-                  ) : (
-                    <p className="text-slate-400">A IA nao retornou materiais para este produto.</p>
-                  )}
-                </div>
-              </div>
-
-              <div className="grid gap-4 md:grid-cols-2">
-                <div className="bg-white border border-slate-100 rounded-2xl p-5">
-                  <h5 className="text-sm font-black uppercase tracking-widest text-slate-400 mb-3">
-                    Proximos passos
-                  </h5>
-                  <ul className="space-y-3">
-                    {productAnalysis.nextSteps.map((item, index) => (
-                      <li key={`${item}-${index}`} className="flex items-start gap-3 text-slate-700">
-                        <span className="mt-1 w-2 h-2 rounded-full bg-slate-900 shrink-0"></span>
-                        <span>{item}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-
-                <div className="bg-amber-50 border border-amber-200 rounded-2xl p-5">
-                  <h5 className="text-sm font-black uppercase tracking-widest text-amber-700 mb-3">
-                    Premissas e alertas
-                  </h5>
-                  <ul className="space-y-3">
-                    {productAnalysis.warnings.length > 0 ? (
-                      productAnalysis.warnings.map((item, index) => (
-                        <li key={`${item}-${index}`} className="text-amber-800">
-                          {item}
-                        </li>
-                      ))
-                    ) : (
-                      <li className="text-amber-800">Nenhum alerta adicional nesta leitura.</li>
-                    )}
-                  </ul>
-                </div>
+              <div className="flex-1 overflow-y-auto no-scrollbar p-6 md:p-8">
+                <AnalysisDetails item={modalAnalysis} />
               </div>
             </div>
-          )}
-        </section>
-      </div>
-    </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 };

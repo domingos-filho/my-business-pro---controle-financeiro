@@ -92,3 +92,11 @@ export interface AiProductAnalysis {
   nextSteps: string[];
   warnings: string[];
 }
+
+export interface StoredAiProductAnalysis {
+  productId: number;
+  productName: string;
+  analysis: AiProductAnalysis;
+  createdAt: number;
+  updatedAt: number;
+}

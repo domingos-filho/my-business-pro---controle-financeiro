@@ -1,4 +1,4 @@
-import { AiBusinessInsight, AiProductAnalysis } from '../types';
+import { AiBusinessInsight, StoredAiProductAnalysis } from '../types';
 import { ApiClient } from './apiClient';
 
 export const AdvisorService = {
@@ -8,10 +8,14 @@ export const AdvisorService = {
     });
   },
 
-  async analyzeProduct(productId: number): Promise<AiProductAnalysis> {
-    return ApiClient.request<AiProductAnalysis>('/ai/product-analysis', {
+  async analyzeProduct(productId: number): Promise<StoredAiProductAnalysis> {
+    return ApiClient.request<StoredAiProductAnalysis>('/ai/product-analysis', {
       method: 'POST',
       body: JSON.stringify({ productId }),
     });
+  },
+
+  async getSavedProductAnalyses(): Promise<StoredAiProductAnalysis[]> {
+    return ApiClient.request<StoredAiProductAnalysis[]>('/ai/product-analyses');
   },
 };

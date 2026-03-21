@@ -114,6 +114,24 @@ const createPasswordResetTokenIndexesSql = [
   'CREATE INDEX IF NOT EXISTS password_reset_tokens_expires_at_idx ON password_reset_tokens (expires_at);',
 ];
 
+const createAiProductAnalysesTableSql = `
+  CREATE TABLE IF NOT EXISTS ai_product_analyses (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    product_id INTEGER NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+    analysis JSONB NOT NULL DEFAULT '{}'::jsonb,
+    created_at BIGINT NOT NULL,
+    updated_at BIGINT NOT NULL
+  );
+`;
+
+const createAiProductAnalysesIndexesSql = [
+  'CREATE UNIQUE INDEX IF NOT EXISTS ai_product_analyses_user_product_unique_idx ON ai_product_analyses (user_id, product_id);',
+  'CREATE INDEX IF NOT EXISTS ai_product_analyses_user_id_idx ON ai_product_analyses (user_id);',
+  'CREATE INDEX IF NOT EXISTS ai_product_analyses_product_id_idx ON ai_product_analyses (product_id);',
+  'CREATE INDEX IF NOT EXISTS ai_product_analyses_updated_at_idx ON ai_product_analyses (updated_at);',
+];
+
 const createIndexesSql = (table) => [
   `CREATE INDEX IF NOT EXISTS ${table}_deleted_at_idx ON ${table} (deleted_at);`,
   `CREATE INDEX IF NOT EXISTS ${table}_updated_at_idx ON ${table} (updated_at);`,
@@ -165,6 +183,11 @@ const ensureSchema = async () => {
 
     await client.query(createPasswordResetTokensTableSql);
     for (const stmt of createPasswordResetTokenIndexesSql) {
+      await client.query(stmt);
+    }
+
+    await client.query(createAiProductAnalysesTableSql);
+    for (const stmt of createAiProductAnalysesIndexesSql) {
       await client.query(stmt);
     }
 

@@ -28,6 +28,53 @@ const fetchActiveEntities = async (table, userId) => {
   return result.rows.map(rowToEntity);
 };
 
+const fetchSavedProductAnalyses = async (userId) => {
+  const result = await pool.query(
+    `SELECT
+       a.product_id,
+       a.analysis,
+       a.created_at,
+       a.updated_at,
+       p.data->>'name' AS product_name
+     FROM ai_product_analyses a
+     INNER JOIN products p
+       ON p.id = a.product_id
+     WHERE a.user_id = $1
+       AND p.user_id = $1
+       AND p.deleted_at IS NULL
+     ORDER BY a.updated_at DESC`,
+    [userId],
+  );
+
+  return result.rows.map((row) => ({
+    productId: Number(row.product_id),
+    productName: row.product_name || 'Produto sem nome',
+    analysis: row.analysis || {},
+    createdAt: Number(row.created_at),
+    updatedAt: Number(row.updated_at),
+  }));
+};
+
+const saveProductAnalysis = async ({ userId, productId, analysis }) => {
+  const now = Date.now();
+
+  const result = await pool.query(
+    `INSERT INTO ai_product_analyses (user_id, product_id, analysis, created_at, updated_at)
+     VALUES ($1, $2, $3::jsonb, $4, $4)
+     ON CONFLICT (user_id, product_id)
+     DO UPDATE SET
+       analysis = EXCLUDED.analysis,
+       updated_at = EXCLUDED.updated_at
+     RETURNING created_at, updated_at`,
+    [userId, productId, analysis, now],
+  );
+
+  return {
+    createdAt: Number(result.rows[0]?.created_at || now),
+    updatedAt: Number(result.rows[0]?.updated_at || now),
+  };
+};
+
 const ensureAiConfigured = () => {
   if (!process.env.API_KEY) {
     const error = new Error('IA nao configurada no servidor.');
@@ -124,6 +171,24 @@ const toProductFallback = (product, text) => ({
   marketingHighlights: [],
   nextSteps: [],
   warnings: ['A resposta da IA veio fora do formato estruturado esperado.'],
+});
+
+const normalizeStoredProductAnalysis = (product, payload, timestamps = {}) => ({
+  productId: Number(product.id),
+  productName: payload.productName || product.name,
+  analysis: {
+    productName: payload.productName || product.name,
+    positioningSummary: payload.positioningSummary || '',
+    idealPriceRange: payload.idealPriceRange || '',
+    targetAudience: payload.targetAudience || '',
+    bestSalesChannels: Array.isArray(payload.bestSalesChannels) ? payload.bestSalesChannels : [],
+    suggestedMaterials: Array.isArray(payload.suggestedMaterials) ? payload.suggestedMaterials : [],
+    marketingHighlights: Array.isArray(payload.marketingHighlights) ? payload.marketingHighlights : [],
+    nextSteps: Array.isArray(payload.nextSteps) ? payload.nextSteps : [],
+    warnings: Array.isArray(payload.warnings) ? payload.warnings : [],
+  },
+  createdAt: Number(timestamps.createdAt || Date.now()),
+  updatedAt: Number(timestamps.updatedAt || Date.now()),
 });
 
 const askForJson = async (prompt) => {
@@ -337,7 +402,24 @@ router.post('/product-analysis', async (req, res, next) => {
       payload = toProductFallback(product, rawResponse);
     }
 
-    res.json(payload);
+    const timestamps = await saveProductAnalysis({
+      userId,
+      productId,
+      analysis: payload,
+    });
+
+    res.json(normalizeStoredProductAnalysis(product, payload, timestamps));
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.get('/product-analyses', async (req, res, next) => {
+  const userId = getUserId(req);
+
+  try {
+    const items = await fetchSavedProductAnalyses(userId);
+    res.json(items);
   } catch (error) {
     next(error);
   }
