@@ -15,8 +15,7 @@ Os dados nao ficam mais em IndexedDB/localStorage para o modulo financeiro princ
 
 Copie `.env.example` para `.env` (Docker) ou configure no EasyPanel:
 
-- `API_KEY`: chave usada no Mentor IA
-- `VITE_API_KEY`: fallback opcional para build do frontend
+- `API_KEY`: chave usada no backend para o modulo de IA
 - `POSTGRES_DB`: nome do banco Postgres
 - `POSTGRES_USER`: usuario do banco
 - `POSTGRES_PASSWORD`: senha do banco (obrigatoria)
@@ -67,7 +66,7 @@ Para ambiente local sem HTTPS, use `AUTH_COOKIE_SECURE=false`.
 2. No EasyPanel, crie um app Docker Compose apontando para o repositorio.
 3. Informe o arquivo `docker-compose.yml` da raiz.
 4. Configure variaveis de ambiente no app:
-   - `API_KEY` (obrigatoria para o Mentor IA)
+   - `API_KEY` (obrigatoria para o modulo de IA no backend)
    - `POSTGRES_DB`
    - `POSTGRES_USER`
    - `POSTGRES_PASSWORD`

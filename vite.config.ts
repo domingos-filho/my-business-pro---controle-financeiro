@@ -4,14 +4,10 @@ import tailwindcss from '@tailwindcss/vite';
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
-  const apiKey = env.API_KEY || env.VITE_API_KEY || '';
   const apiProxyTarget = env.VITE_API_PROXY_TARGET || 'http://localhost:4000';
 
   return {
     plugins: [react(), tailwindcss()],
-    define: {
-      'process.env.API_KEY': JSON.stringify(apiKey),
-    },
     build: {
       outDir: 'dist',
       emptyOutDir: true,
