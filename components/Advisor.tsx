@@ -318,7 +318,7 @@ export const Advisor: React.FC = () => {
 
   return (
     <>
-      <div className="space-y-6 animate-fadeIn">
+      <div className="space-y-8 animate-fadeIn">
         <div className="bg-slate-950 text-white p-8 rounded-[2.5rem] shadow-2xl overflow-hidden relative">
           <div className="relative z-10 max-w-2xl">
             <span className="text-[11px] font-black uppercase tracking-[0.25em] text-indigo-300/70">
@@ -342,10 +342,10 @@ export const Advisor: React.FC = () => {
           </div>
         )}
 
-        <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+        <div className="space-y-6">
           <section className="bg-white border border-slate-100 shadow-sm rounded-[2rem] p-6 md:p-8 space-y-5">
-            <div className="flex items-start justify-between gap-4">
-              <div>
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+              <div className="max-w-3xl">
                 <div className="inline-flex items-center gap-2 text-[11px] font-black uppercase tracking-[0.2em] text-indigo-500">
                   <ChartUpIcon className="w-4 h-4" />
                   <span>Panorama do negocio</span>
@@ -355,16 +355,16 @@ export const Advisor: React.FC = () => {
                   A IA resume seu momento atual e sugere acoes praticas para melhorar operacao e margem.
                 </p>
               </div>
-            </div>
 
-            <button
-              onClick={handleOverviewInsight}
-              disabled={loadingOverview}
-              className="inline-flex items-center gap-2 bg-indigo-600 text-white px-5 py-3 rounded-2xl font-bold shadow-lg shadow-indigo-100 hover:bg-indigo-700 transition-all active:scale-95 disabled:opacity-60"
-            >
-              <SparklesIcon className="w-4 h-4" />
-              <span>{loadingOverview ? 'Gerando insight...' : 'Gerar insight agora'}</span>
-            </button>
+              <button
+                onClick={handleOverviewInsight}
+                disabled={loadingOverview}
+                className="inline-flex items-center justify-center gap-2 bg-indigo-600 text-white px-5 py-3 rounded-2xl font-bold shadow-lg shadow-indigo-100 hover:bg-indigo-700 transition-all active:scale-95 disabled:opacity-60 lg:self-start"
+              >
+                <SparklesIcon className="w-4 h-4" />
+                <span>{loadingOverview ? 'Gerando insight...' : 'Gerar insight agora'}</span>
+              </button>
+            </div>
 
             {overviewInsight && (
               <div className="space-y-5 pt-2">
@@ -427,205 +427,222 @@ export const Advisor: React.FC = () => {
               </p>
             </div>
 
-            <div className="grid gap-5 lg:grid-cols-2">
-              <div className="space-y-4 rounded-2xl border border-slate-100 bg-slate-50/70 p-5">
-                <div>
-                  <h4 className="text-sm font-black uppercase tracking-widest text-slate-400">
-                    Nova analise
-                  </h4>
-                  <p className="text-sm text-slate-500 mt-2">
-                    Analise um produto cadastrado ou use uma busca livre para estudar um produto que ainda nao esta no catalogo.
-                  </p>
-                </div>
+            <div className="space-y-5">
+              <div className="space-y-4 rounded-2xl border border-slate-100 bg-slate-50/70 p-5 md:p-6">
+                <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                  <div className="max-w-3xl">
+                    <h4 className="text-sm font-black uppercase tracking-widest text-slate-400">
+                      Nova analise
+                    </h4>
+                    <p className="text-sm text-slate-500 mt-2">
+                      Analise um produto cadastrado ou use uma busca livre para estudar um produto que ainda nao esta no catalogo.
+                    </p>
+                  </div>
 
-                <div className="grid grid-cols-2 gap-2 rounded-2xl bg-white p-1 border border-slate-200">
-                  <button
-                    type="button"
-                    onClick={() => setAnalysisMode('catalog')}
-                    className={`rounded-xl px-4 py-2.5 text-sm font-black transition-all ${
-                      analysisMode === 'catalog'
-                        ? 'bg-slate-950 text-white shadow-sm'
-                        : 'text-slate-500 hover:text-slate-900'
-                    }`}
-                  >
-                    Produto cadastrado
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setAnalysisMode('search')}
-                    className={`rounded-xl px-4 py-2.5 text-sm font-black transition-all ${
-                      analysisMode === 'search'
-                        ? 'bg-slate-950 text-white shadow-sm'
-                        : 'text-slate-500 hover:text-slate-900'
-                    }`}
-                  >
-                    Busca livre
-                  </button>
+                  <div className="grid grid-cols-2 gap-2 rounded-2xl bg-white p-1 border border-slate-200 w-full lg:w-auto lg:min-w-[320px]">
+                    <button
+                      type="button"
+                      onClick={() => setAnalysisMode('catalog')}
+                      className={`rounded-xl px-4 py-2.5 text-sm font-black transition-all ${
+                        analysisMode === 'catalog'
+                          ? 'bg-slate-950 text-white shadow-sm'
+                          : 'text-slate-500 hover:text-slate-900'
+                      }`}
+                    >
+                      Produto cadastrado
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setAnalysisMode('search')}
+                      className={`rounded-xl px-4 py-2.5 text-sm font-black transition-all ${
+                        analysisMode === 'search'
+                          ? 'bg-slate-950 text-white shadow-sm'
+                          : 'text-slate-500 hover:text-slate-900'
+                      }`}
+                    >
+                      Busca livre
+                    </button>
+                  </div>
                 </div>
 
                 {analysisMode === 'catalog' ? (
-                  <div className="space-y-4">
-                    <p className="text-sm text-slate-500">
-                      Se rodar novamente para o mesmo produto, a analise anterior sera substituida pela nova.
-                    </p>
+                  <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
+                    <div className="space-y-4">
+                      <p className="text-sm text-slate-500">
+                        Se rodar novamente para o mesmo produto, a analise anterior sera substituida pela nova.
+                      </p>
 
-                    <div>
-                      <label className="block text-[11px] font-black text-slate-400 uppercase tracking-widest ml-1 mb-2">
-                        Produto
-                      </label>
-                      <select
-                        value={selectedProductId}
-                        onChange={(event) => setSelectedProductId(parseProductId(event.target.value))}
-                        className="w-full rounded-2xl border border-slate-200 bg-white p-3.5 text-slate-900 font-medium outline-none focus:ring-2 focus:ring-indigo-500"
-                      >
-                        {products.length === 0 ? (
-                          <option value="0">Nenhum produto cadastrado</option>
-                        ) : (
-                          products.map((product) => (
-                            <option key={product.id} value={product.id}>
-                              {product.name}
-                            </option>
-                          ))
-                        )}
-                      </select>
+                      <div>
+                        <label className="block text-[11px] font-black text-slate-400 uppercase tracking-widest ml-1 mb-2">
+                          Produto
+                        </label>
+                        <select
+                          value={selectedProductId}
+                          onChange={(event) => setSelectedProductId(parseProductId(event.target.value))}
+                          className="w-full rounded-2xl border border-slate-200 bg-white p-3.5 text-slate-900 font-medium outline-none focus:ring-2 focus:ring-indigo-500"
+                        >
+                          {products.length === 0 ? (
+                            <option value="0">Nenhum produto cadastrado</option>
+                          ) : (
+                            products.map((product) => (
+                              <option key={product.id} value={product.id}>
+                                {product.name}
+                              </option>
+                            ))
+                          )}
+                        </select>
+                      </div>
                     </div>
+
+                    <button
+                      onClick={handleProductAnalysis}
+                      disabled={loadingProduct || products.length === 0}
+                      className="inline-flex items-center justify-center gap-2 bg-slate-950 text-white px-5 py-3 rounded-2xl font-bold shadow-lg hover:bg-slate-800 transition-all active:scale-95 disabled:opacity-60 lg:min-w-[260px]"
+                    >
+                      <SparklesIcon className="w-4 h-4" />
+                      <span>{loadingProduct ? 'Analisando produto...' : 'Analisar produto com IA'}</span>
+                    </button>
                   </div>
                 ) : (
                   <div className="space-y-4">
-                    <div>
-                      <label className="block text-[11px] font-black text-slate-400 uppercase tracking-widest ml-1 mb-2">
-                        Busca do produto
-                      </label>
-                      <input
-                        type="text"
-                        value={searchQuery}
-                        onChange={(event) => setSearchQuery(event.target.value)}
-                        className="w-full rounded-2xl border border-slate-200 bg-white p-3.5 text-slate-900 font-medium outline-none focus:ring-2 focus:ring-indigo-500"
-                        placeholder="Ex: squeezes personalizados para academia"
-                      />
-                    </div>
-
-                    <div className="grid gap-4 md:grid-cols-2">
+                    <div className="grid gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)]">
                       <div>
                         <label className="block text-[11px] font-black text-slate-400 uppercase tracking-widest ml-1 mb-2">
-                          Custo de producao (R$)
+                          Busca do produto
                         </label>
                         <input
-                          type="number"
-                          min="0"
-                          step="0.01"
-                          inputMode="decimal"
-                          value={searchBaseCost}
-                          onChange={(event) => setSearchBaseCost(event.target.value)}
+                          type="text"
+                          value={searchQuery}
+                          onChange={(event) => setSearchQuery(event.target.value)}
                           className="w-full rounded-2xl border border-slate-200 bg-white p-3.5 text-slate-900 font-medium outline-none focus:ring-2 focus:ring-indigo-500"
-                          placeholder="Opcional"
+                          placeholder="Ex: squeezes personalizados para academia"
                         />
                       </div>
 
-                      <div>
-                        <label className="block text-[11px] font-black text-slate-400 uppercase tracking-widest ml-1 mb-2">
-                          Valor final (R$)
-                        </label>
-                        <input
-                          type="number"
-                          min="0"
-                          step="0.01"
-                          inputMode="decimal"
-                          value={searchSellingPrice}
-                          onChange={(event) => setSearchSellingPrice(event.target.value)}
-                          className="w-full rounded-2xl border border-slate-200 bg-white p-3.5 text-slate-900 font-medium outline-none focus:ring-2 focus:ring-indigo-500"
-                          placeholder="Opcional"
-                        />
+                      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-2">
+                        <div>
+                          <label className="block text-[11px] font-black text-slate-400 uppercase tracking-widest ml-1 mb-2">
+                            Custo de producao (R$)
+                          </label>
+                          <input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            inputMode="decimal"
+                            value={searchBaseCost}
+                            onChange={(event) => setSearchBaseCost(event.target.value)}
+                            className="w-full rounded-2xl border border-slate-200 bg-white p-3.5 text-slate-900 font-medium outline-none focus:ring-2 focus:ring-indigo-500"
+                            placeholder="Opcional"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-[11px] font-black text-slate-400 uppercase tracking-widest ml-1 mb-2">
+                            Valor final (R$)
+                          </label>
+                          <input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            inputMode="decimal"
+                            value={searchSellingPrice}
+                            onChange={(event) => setSearchSellingPrice(event.target.value)}
+                            className="w-full rounded-2xl border border-slate-200 bg-white p-3.5 text-slate-900 font-medium outline-none focus:ring-2 focus:ring-indigo-500"
+                            placeholder="Opcional"
+                          />
+                        </div>
                       </div>
                     </div>
 
-                    <div>
-                      <label className="block text-[11px] font-black text-slate-400 uppercase tracking-widest ml-1 mb-2">
-                        Descricao
-                      </label>
-                      <textarea
-                        value={searchDescription}
-                        onChange={(event) => setSearchDescription(event.target.value)}
-                        className="w-full min-h-28 rounded-2xl border border-slate-200 bg-white p-3.5 text-slate-900 font-medium outline-none resize-y focus:ring-2 focus:ring-indigo-500"
-                        placeholder="Explique o produto, acabamento, proposta e contexto de uso."
-                      />
-                    </div>
+                    <div className="grid gap-4 xl:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)]">
+                      <div>
+                        <label className="block text-[11px] font-black text-slate-400 uppercase tracking-widest ml-1 mb-2">
+                          Descricao
+                        </label>
+                        <textarea
+                          value={searchDescription}
+                          onChange={(event) => setSearchDescription(event.target.value)}
+                          className="w-full min-h-32 rounded-2xl border border-slate-200 bg-white p-3.5 text-slate-900 font-medium outline-none resize-y focus:ring-2 focus:ring-indigo-500"
+                          placeholder="Explique o produto, acabamento, proposta e contexto de uso."
+                        />
+                      </div>
 
-                    <div>
-                      <label className="block text-[11px] font-black text-slate-400 uppercase tracking-widest ml-1 mb-2">
-                        Insumos principais
-                      </label>
-                      <textarea
-                        value={searchSuppliesText}
-                        onChange={(event) => setSearchSuppliesText(event.target.value)}
-                        className="w-full min-h-24 rounded-2xl border border-slate-200 bg-white p-3.5 text-slate-900 font-medium outline-none resize-y focus:ring-2 focus:ring-indigo-500"
-                        placeholder="Separe por virgula ou linha. Ex: vidro 250ml, etiqueta adesiva, fita de cetim"
-                      />
+                      <div className="flex flex-col gap-4">
+                        <div>
+                          <label className="block text-[11px] font-black text-slate-400 uppercase tracking-widest ml-1 mb-2">
+                            Insumos principais
+                          </label>
+                          <textarea
+                            value={searchSuppliesText}
+                            onChange={(event) => setSearchSuppliesText(event.target.value)}
+                            className="w-full min-h-32 rounded-2xl border border-slate-200 bg-white p-3.5 text-slate-900 font-medium outline-none resize-y focus:ring-2 focus:ring-indigo-500"
+                            placeholder="Separe por virgula ou linha. Ex: vidro 250ml, etiqueta adesiva, fita de cetim"
+                          />
+                        </div>
+
+                        <button
+                          onClick={handleProductAnalysis}
+                          disabled={loadingProduct}
+                          className="inline-flex items-center justify-center gap-2 bg-slate-950 text-white px-5 py-3 rounded-2xl font-bold shadow-lg hover:bg-slate-800 transition-all active:scale-95 disabled:opacity-60 xl:mt-auto"
+                        >
+                          <SparklesIcon className="w-4 h-4" />
+                          <span>{loadingProduct ? 'Analisando produto...' : 'Analisar busca livre com IA'}</span>
+                        </button>
+                      </div>
                     </div>
                   </div>
                 )}
-
-                <button
-                  onClick={handleProductAnalysis}
-                  disabled={loadingProduct || (analysisMode === 'catalog' && products.length === 0)}
-                  className="inline-flex items-center gap-2 bg-slate-950 text-white px-5 py-3 rounded-2xl font-bold shadow-lg hover:bg-slate-800 transition-all active:scale-95 disabled:opacity-60"
-                >
-                  <SparklesIcon className="w-4 h-4" />
-                  <span>
-                    {loadingProduct
-                      ? 'Analisando produto...'
-                      : analysisMode === 'catalog'
-                        ? 'Analisar produto com IA'
-                        : 'Analisar busca livre com IA'}
-                  </span>
-                </button>
               </div>
 
-              <div className="space-y-4 rounded-2xl border border-slate-100 bg-slate-50/70 p-5">
-                <div>
-                  <div className="flex items-center justify-between gap-3">
-                    <h4 className="text-sm font-black uppercase tracking-widest text-slate-400">
-                      Analises salvas
-                    </h4>
-                    <span className="text-xs font-bold text-slate-400">
-                      {loadingSavedAnalyses ? 'Carregando...' : `${savedAnalyses.length} salvas`}
-                    </span>
+              <div className="space-y-4 rounded-2xl border border-slate-100 bg-slate-50/70 p-5 md:p-6">
+                <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                  <div>
+                    <div className="flex items-center gap-3">
+                      <h4 className="text-sm font-black uppercase tracking-widest text-slate-400">
+                        Analises salvas
+                      </h4>
+                      <span className="text-xs font-bold text-slate-400">
+                        {loadingSavedAnalyses ? 'Carregando...' : `${savedAnalyses.length} salvas`}
+                      </span>
+                    </div>
+                    <p className="text-sm text-slate-500 mt-2">
+                      Selecione um produto que ja possui analise para abrir a leitura em destaque.
+                    </p>
                   </div>
-                  <p className="text-sm text-slate-500 mt-2">
-                    Selecione um produto que ja possui analise para abrir a leitura em destaque.
-                  </p>
                 </div>
 
-                <div>
-                  <label className="block text-[11px] font-black text-slate-400 uppercase tracking-widest ml-1 mb-2">
-                    Produto com analise
-                  </label>
-                  <select
-                    value={selectedSavedProductId}
-                    onChange={(event) => setSelectedSavedProductId(parseProductId(event.target.value))}
-                    className="w-full rounded-2xl border border-slate-200 bg-white p-3.5 text-slate-900 font-medium outline-none focus:ring-2 focus:ring-indigo-500"
+                <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
+                  <div>
+                    <label className="block text-[11px] font-black text-slate-400 uppercase tracking-widest ml-1 mb-2">
+                      Produto com analise
+                    </label>
+                    <select
+                      value={selectedSavedProductId}
+                      onChange={(event) => setSelectedSavedProductId(parseProductId(event.target.value))}
+                      className="w-full rounded-2xl border border-slate-200 bg-white p-3.5 text-slate-900 font-medium outline-none focus:ring-2 focus:ring-indigo-500"
+                      disabled={savedAnalyses.length === 0}
+                    >
+                      {savedAnalyses.length === 0 ? (
+                        <option value="0">Nenhuma analise salva ainda</option>
+                      ) : (
+                        savedAnalyses.map((item) => (
+                          <option key={item.productId} value={item.productId}>
+                            {item.productName}
+                          </option>
+                        ))
+                      )}
+                    </select>
+                  </div>
+
+                  <button
+                    onClick={handleOpenSavedAnalysis}
                     disabled={savedAnalyses.length === 0}
+                    className="inline-flex items-center justify-center gap-2 bg-white border border-slate-200 text-slate-900 px-5 py-3 rounded-2xl font-bold shadow-sm hover:border-indigo-300 hover:text-indigo-600 transition-all active:scale-95 disabled:opacity-60 lg:min-w-[220px]"
                   >
-                    {savedAnalyses.length === 0 ? (
-                      <option value="0">Nenhuma analise salva ainda</option>
-                    ) : (
-                      savedAnalyses.map((item) => (
-                        <option key={item.productId} value={item.productId}>
-                          {item.productName}
-                        </option>
-                      ))
-                    )}
-                  </select>
+                    <ArrowRightIcon className="w-4 h-4" />
+                    <span>Ver analise salva</span>
+                  </button>
                 </div>
-
-                <button
-                  onClick={handleOpenSavedAnalysis}
-                  disabled={savedAnalyses.length === 0}
-                  className="inline-flex items-center gap-2 bg-white border border-slate-200 text-slate-900 px-5 py-3 rounded-2xl font-bold shadow-sm hover:border-indigo-300 hover:text-indigo-600 transition-all active:scale-95 disabled:opacity-60"
-                >
-                  <ArrowRightIcon className="w-4 h-4" />
-                  <span>Ver analise salva</span>
-                </button>
               </div>
             </div>
 

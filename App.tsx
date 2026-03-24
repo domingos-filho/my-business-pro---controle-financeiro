@@ -4,6 +4,7 @@ import { Categories } from './components/Categories';
 import {
   CheckCircleIcon,
   ClockIcon,
+  LogoutIcon,
   RefreshIcon,
   RocketIcon,
 } from './components/AppIcons';
@@ -217,10 +218,16 @@ const App: React.FC = () => {
 
               <button
                 onClick={handleLogout}
-                className="w-10 h-10 rounded-full border border-slate-200 flex items-center justify-center bg-white hover:bg-slate-50 transition-colors"
+                className="flex items-center gap-3 rounded-full border border-slate-200 bg-white py-1.5 pl-2 pr-4 shadow-sm transition-colors hover:bg-slate-50"
                 title="Sair"
               >
-                <img src={avatarSrc} alt={user.name} className="w-8 h-8 rounded-full" />
+                <img src={avatarSrc} alt={user.name} className="h-8 w-8 rounded-full" />
+                <span className="max-w-[96px] truncate text-[11px] font-black uppercase tracking-wide text-slate-700 md:max-w-[120px]">
+                  {user.name}
+                </span>
+                <span className="flex h-7 w-7 items-center justify-center rounded-full bg-slate-100 text-slate-500">
+                  <LogoutIcon className="h-4 w-4" />
+                </span>
               </button>
             </div>
           </div>

@@ -428,98 +428,112 @@ export const Products: React.FC = () => {
         </form>
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+      <div className="space-y-4" role="list">
         {products.map((product) => (
-          <div
+          <article
             key={product.id}
-            className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm hover:shadow-lg transition-all duration-300"
+            role="listitem"
+            className="bg-white rounded-[2rem] border border-slate-100 shadow-sm hover:shadow-lg transition-all duration-300 p-5 md:p-6"
           >
-            <div className="flex items-start justify-between gap-3 mb-5">
-              <div className="min-w-0">
-                <h3 className="text-lg font-black text-slate-900 truncate" title={product.name}>
-                  {product.name}
-                </h3>
-                <p className="text-[10px] text-slate-400 font-black uppercase tracking-[0.2em] mt-1">
-                  {product.supplies?.length || 0} insumo(s) vinculado(s)
-                </p>
+            <div className="space-y-5">
+              <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                <div className="min-w-0">
+                  <h3 className="text-xl font-black text-slate-900 truncate" title={product.name}>
+                    {product.name}
+                  </h3>
+                  <p className="text-[10px] text-slate-400 font-black uppercase tracking-[0.2em] mt-1">
+                    {product.supplies?.length || 0} insumo(s) vinculado(s)
+                  </p>
+                </div>
+
+                <div className="flex gap-2 shrink-0">
+                  <button
+                    onClick={() => handleOpenEdit(product)}
+                    className="h-11 rounded-2xl bg-slate-50 px-4 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 transition-all active:scale-95 flex items-center justify-center gap-2 font-bold"
+                    title="Editar produto"
+                  >
+                    <EditIcon className="w-4 h-4" />
+                    <span>Editar</span>
+                  </button>
+                  <button
+                    onClick={() => product.id && handleDelete(product.id)}
+                    className="h-11 rounded-2xl bg-slate-50 px-4 text-slate-500 hover:text-rose-600 hover:bg-rose-50 transition-all active:scale-95 flex items-center justify-center gap-2 font-bold"
+                    title="Excluir produto"
+                  >
+                    <TrashIcon className="w-4 h-4" />
+                    <span>Excluir</span>
+                  </button>
+                </div>
               </div>
 
-              <div className="flex gap-1.5 shrink-0">
-                <button
-                  onClick={() => handleOpenEdit(product)}
-                  className="w-10 h-10 rounded-xl bg-slate-50 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 transition-all active:scale-90 flex items-center justify-center"
-                  title="Editar produto"
-                >
-                  <EditIcon className="w-4 h-4" />
-                </button>
-                <button
-                  onClick={() => product.id && handleDelete(product.id)}
-                  className="w-10 h-10 rounded-xl bg-slate-50 text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-all active:scale-90 flex items-center justify-center"
-                  title="Excluir produto"
-                >
-                  <TrashIcon className="w-4 h-4" />
-                </button>
+              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                <div className="rounded-2xl bg-slate-50 px-4 py-4">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Estoque</p>
+                  <p className={`text-2xl font-black mt-1 ${product.stockCount < 5 ? 'text-rose-500' : 'text-slate-900'}`}>
+                    {product.stockCount}
+                  </p>
+                </div>
+
+                <div className="rounded-2xl bg-slate-50 px-4 py-4">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Custo</p>
+                  <p className="text-xl font-black text-slate-900 mt-1">R$ {product.baseCost.toFixed(2)}</p>
+                </div>
+
+                <div className="rounded-2xl bg-indigo-50 px-4 py-4">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-indigo-400">Valor</p>
+                  <p className="text-xl font-black text-indigo-600 mt-1">R$ {product.sellingPrice.toFixed(2)}</p>
+                </div>
+
+                <div className="rounded-2xl bg-emerald-50 px-4 py-4">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-emerald-500">Insumos</p>
+                  <p className="text-2xl font-black text-emerald-600 mt-1">
+                    {product.supplies?.length || 0}
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid gap-4 xl:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]">
+                <div className="rounded-2xl border border-slate-100 bg-slate-50/60 px-4 py-4">
+                  <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 mb-3">
+                    Descricao
+                  </p>
+                  <p className="text-sm text-slate-600 leading-6">
+                    {product.description || 'Sem descricao cadastrada.'}
+                  </p>
+                </div>
+
+                <div className="rounded-2xl border border-slate-100 bg-slate-50/60 px-4 py-4">
+                  <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 mb-3">
+                    Insumos
+                  </p>
+                  {product.supplies?.length ? (
+                    <div className="flex flex-wrap gap-2">
+                      {product.supplies.map((supply, index) => (
+                        <span
+                          key={`${product.id}-${index}-${supply.name}`}
+                          className="inline-flex items-center gap-1 rounded-full bg-white border border-slate-200 px-3 py-1.5 text-xs font-bold text-slate-600"
+                        >
+                          <span>{supply.name}</span>
+                          {supply.quantity && (
+                            <span className="text-slate-400">
+                              {supply.quantity}
+                              {supply.unit ? ` ${supply.unit}` : ''}
+                            </span>
+                          )}
+                        </span>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-slate-400">Nenhum insumo cadastrado.</p>
+                  )}
+                </div>
               </div>
             </div>
-
-            <div className="grid grid-cols-3 gap-3 mb-5">
-              <div className="rounded-2xl bg-slate-50 px-3 py-3">
-                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Estoque</p>
-                <p className={`text-xl font-black ${product.stockCount < 5 ? 'text-rose-500' : 'text-slate-900'}`}>
-                  {product.stockCount}
-                </p>
-              </div>
-              <div className="rounded-2xl bg-slate-50 px-3 py-3">
-                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Custo</p>
-                <p className="text-lg font-black text-slate-900">R$ {product.baseCost.toFixed(2)}</p>
-              </div>
-              <div className="rounded-2xl bg-indigo-50 px-3 py-3">
-                <p className="text-[10px] font-black uppercase tracking-widest text-indigo-400">Valor</p>
-                <p className="text-lg font-black text-indigo-600">R$ {product.sellingPrice.toFixed(2)}</p>
-              </div>
-            </div>
-
-            <div className="space-y-4">
-              <div>
-                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 mb-2">
-                  Descricao
-                </p>
-                <p className="text-sm text-slate-600 leading-6">
-                  {product.description || 'Sem descricao cadastrada.'}
-                </p>
-              </div>
-
-              <div>
-                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 mb-2">
-                  Insumos
-                </p>
-                {product.supplies?.length ? (
-                  <div className="flex flex-wrap gap-2">
-                    {product.supplies.map((supply, index) => (
-                      <span
-                        key={`${product.id}-${index}-${supply.name}`}
-                        className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-600"
-                      >
-                        <span>{supply.name}</span>
-                        {supply.quantity && (
-                          <span className="text-slate-400">
-                            {supply.quantity}
-                            {supply.unit ? ` ${supply.unit}` : ''}
-                          </span>
-                        )}
-                      </span>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-sm text-slate-400">Nenhum insumo cadastrado.</p>
-                )}
-              </div>
-            </div>
-          </div>
+          </article>
         ))}
 
         {products.length === 0 && !showForm && (
-          <div className="col-span-full py-20 text-center bg-white rounded-[2rem] border border-dashed border-slate-300">
+          <div className="py-20 text-center bg-white rounded-[2rem] border border-dashed border-slate-300">
             <BoxIcon className="w-14 h-14 mx-auto mb-4 text-slate-300" />
             <h3 className="text-xl font-black text-slate-800">Nenhum produto cadastrado</h3>
             <p className="text-slate-400 font-medium max-w-sm mx-auto mt-2 px-6">

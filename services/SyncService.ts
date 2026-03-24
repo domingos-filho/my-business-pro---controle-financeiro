@@ -1,67 +1,58 @@
-
-import { CustomerRepo, ProductRepo, OrderRepo, TransactionRepo, CategoryRepo } from '../repositories';
+import {
+  CategoryRepo,
+  CustomerRepo,
+  OrderRepo,
+  ProductRepo,
+  TransactionRepo,
+} from '../repositories';
 
 export interface SyncStats {
   pendingCount: number;
   lastSync?: number;
 }
 
-/**
- * SyncService provides an abstraction for managing data synchronization.
- * Currently it monitors local changes pending push to a hypothetical cloud.
- */
-export const SyncService = {
-  /**
-   * Calculates total number of records across all tables that are pending sync.
-   */
-  async getSyncStats(): Promise<SyncStats> {
-    const counts = await Promise.all([
-      CustomerRepo.getPendingSync(),
-      ProductRepo.getPendingSync(),
-      OrderRepo.getPendingSync(),
-      TransactionRepo.getPendingSync(),
-      CategoryRepo.getPendingSync(),
-    ]);
+const syncTargets = [
+  CustomerRepo,
+  ProductRepo,
+  OrderRepo,
+  TransactionRepo,
+  CategoryRepo,
+];
 
-    const totalPending = counts.reduce((acc, current) => acc + current.length, 0);
+export const SyncService = {
+  async getSyncStats(): Promise<SyncStats> {
+    const pendingGroups = await Promise.all(syncTargets.map((repo) => repo.getPendingSync()));
+    const totalPending = pendingGroups.reduce((acc, current) => acc + current.length, 0);
     const lastSyncStr = localStorage.getItem('last_sync_time');
+    const lastSync = lastSyncStr ? Number.parseInt(lastSyncStr, 10) : 0;
 
     return {
       pendingCount: totalPending,
-      lastSync: lastSyncStr ? parseInt(lastSyncStr) : 0
+      lastSync,
     };
   },
 
-  /**
-   * Placeholder for future cloud implementation.
-   * Marks items as synced and updates the last sync timestamp.
-   */
   async syncNow(): Promise<void> {
-    console.info('Iniciando sincronização...');
-    
-    // Simulate network delay for a premium feel
-    await new Promise(resolve => setTimeout(resolve, 2000));
-    
-    // Logic to simulate marking items as synced
-    const pending = await Promise.all([
-      CustomerRepo.getPendingSync(),
-      ProductRepo.getPendingSync(),
-      OrderRepo.getPendingSync(),
-      TransactionRepo.getPendingSync(),
-      CategoryRepo.getPendingSync(),
-    ]);
+    console.info('Iniciando sincronizacao...');
 
-    // Simple simulation: mark all found pending as synced
-    for (const group of pending) {
-      for (const item of group) {
-        if (item.id) {
-          // In a real app, this would be repo-specific, but baseRepo handles markAsSynced
-          // For the sake of simulation, we assume they are marked by the caller or just update metadata
-        }
-      }
+    const pendingGroups = await Promise.all(
+      syncTargets.map(async (repo) => ({
+        repo,
+        items: await repo.getPendingSync(),
+      })),
+    );
+
+    const syncOperations = pendingGroups.flatMap(({ repo, items }) =>
+      items
+        .filter((item) => typeof item.id === 'number')
+        .map((item) => repo.markAsSynced(item.id as number)),
+    );
+
+    if (syncOperations.length > 0) {
+      await Promise.all(syncOperations);
     }
-    
+
     localStorage.setItem('last_sync_time', Date.now().toString());
-    console.info('Sincronização concluída (Simulada).');
-  }
+    console.info('Sincronizacao concluida.');
+  },
 };

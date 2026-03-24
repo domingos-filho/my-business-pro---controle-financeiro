@@ -133,6 +133,14 @@ export const ArrowRightIcon: React.FC<IconProps> = ({ className = '' }) => (
   </svg>
 );
 
+export const LogoutIcon: React.FC<IconProps> = ({ className = '' }) => (
+  <svg {...baseProps} className={className}>
+    <path d="M10 4.5H7A2.5 2.5 0 0 0 4.5 7v10A2.5 2.5 0 0 0 7 19.5h3" />
+    <path d="M13 12h7" />
+    <path d="m17 8 4 4-4 4" />
+  </svg>
+);
+
 export const IncomeIcon: React.FC<IconProps> = ({ className = '' }) => (
   <svg {...baseProps} className={className}>
     <path d="M12 20V5" />
