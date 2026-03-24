@@ -35,7 +35,9 @@ const fetchSavedProductAnalyses = async (userId) => {
        a.analysis,
        a.created_at,
        a.updated_at,
-       p.data->>'name' AS product_name
+       p.data->>'name' AS product_name,
+       p.data->>'baseCost' AS product_base_cost,
+       p.data->>'sellingPrice' AS product_selling_price
      FROM ai_product_analyses a
      INNER JOIN products p
        ON p.id = a.product_id
@@ -49,7 +51,14 @@ const fetchSavedProductAnalyses = async (userId) => {
   return result.rows.map((row) => ({
     productId: Number(row.product_id),
     productName: row.product_name || 'Produto sem nome',
-    analysis: row.analysis || {},
+    analysis: buildNormalizedProductAnalysis(
+      {
+        name: row.product_name || 'Produto sem nome',
+        baseCost: Number(row.product_base_cost || 0),
+        sellingPrice: Number(row.product_selling_price || 0),
+      },
+      row.analysis || {},
+    ),
     createdAt: Number(row.created_at),
     updatedAt: Number(row.updated_at),
   }));
@@ -161,10 +170,42 @@ const toOverviewFallback = (text) => ({
   opportunities: [],
 });
 
+const calculateProfitMarginPercentage = (baseCost, sellingPrice) => {
+  const normalizedBaseCost = Number(baseCost || 0);
+  const normalizedSellingPrice = Number(sellingPrice || 0);
+
+  if (
+    !Number.isFinite(normalizedBaseCost) ||
+    !Number.isFinite(normalizedSellingPrice) ||
+    normalizedBaseCost <= 0 ||
+    normalizedSellingPrice <= 0
+  ) {
+    return 'Nao informado';
+  }
+
+  return `${(((normalizedSellingPrice - normalizedBaseCost) / normalizedBaseCost) * 100).toFixed(1)}%`;
+};
+
+const buildNormalizedProductAnalysis = (product, payload = {}) => ({
+  productName: payload.productName || product.name || 'Produto sem nome',
+  positioningSummary: payload.positioningSummary || '',
+  idealPriceRange: payload.idealPriceRange || '',
+  profitMarginPercentage:
+    payload.profitMarginPercentage ||
+    calculateProfitMarginPercentage(product.baseCost, product.sellingPrice),
+  targetAudience: payload.targetAudience || '',
+  bestSalesChannels: Array.isArray(payload.bestSalesChannels) ? payload.bestSalesChannels : [],
+  suggestedMaterials: Array.isArray(payload.suggestedMaterials) ? payload.suggestedMaterials : [],
+  marketingHighlights: Array.isArray(payload.marketingHighlights) ? payload.marketingHighlights : [],
+  nextSteps: Array.isArray(payload.nextSteps) ? payload.nextSteps : [],
+  warnings: Array.isArray(payload.warnings) ? payload.warnings : [],
+});
+
 const toProductFallback = (product, text) => ({
   productName: product.name,
   positioningSummary: text || 'Nao foi possivel estruturar a resposta da IA.',
   idealPriceRange: `Analise manual recomendada (preco atual: R$ ${product.sellingPrice.toFixed(2)})`,
+  profitMarginPercentage: calculateProfitMarginPercentage(product.baseCost, product.sellingPrice),
   targetAudience: 'Nao identificado automaticamente.',
   bestSalesChannels: [],
   suggestedMaterials: [],
@@ -176,20 +217,26 @@ const toProductFallback = (product, text) => ({
 const normalizeStoredProductAnalysis = (product, payload, timestamps = {}) => ({
   productId: Number(product.id),
   productName: payload.productName || product.name,
-  analysis: {
-    productName: payload.productName || product.name,
-    positioningSummary: payload.positioningSummary || '',
-    idealPriceRange: payload.idealPriceRange || '',
-    targetAudience: payload.targetAudience || '',
-    bestSalesChannels: Array.isArray(payload.bestSalesChannels) ? payload.bestSalesChannels : [],
-    suggestedMaterials: Array.isArray(payload.suggestedMaterials) ? payload.suggestedMaterials : [],
-    marketingHighlights: Array.isArray(payload.marketingHighlights) ? payload.marketingHighlights : [],
-    nextSteps: Array.isArray(payload.nextSteps) ? payload.nextSteps : [],
-    warnings: Array.isArray(payload.warnings) ? payload.warnings : [],
-  },
+  analysis: buildNormalizedProductAnalysis(product, payload),
   createdAt: Number(timestamps.createdAt || Date.now()),
   updatedAt: Number(timestamps.updatedAt || Date.now()),
 });
+
+const parseOptionalMoneyValue = (value) => {
+  if (value === undefined || value === null || value === '') {
+    return 0;
+  }
+
+  const normalizedValue = Number(String(value).replace(',', '.'));
+  return Number.isFinite(normalizedValue) ? normalizedValue : NaN;
+};
+
+const parseSuppliesText = (value) =>
+  String(value || '')
+    .split(/\n|,/)
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .map((name) => ({ name }));
 
 const askForJson = async (prompt) => {
   try {
@@ -240,6 +287,7 @@ Produto:
 - Nome: ${product.name}
 - Preco atual: R$ ${product.sellingPrice.toFixed(2)}
 - Custo base atual: R$ ${product.baseCost.toFixed(2)}
+- Ganho atual sobre o custo: ${calculateProfitMarginPercentage(product.baseCost, product.sellingPrice)}
 - Estoque atual: ${product.stockCount}
 - Descricao cadastrada: ${product.description || 'Sem descricao'}
 - Insumos cadastrados: ${
@@ -280,6 +328,7 @@ Estrutura JSON obrigatoria:
   "productName": "nome do produto",
   "positioningSummary": "resumo de posicionamento em 2 ou 3 frases",
   "idealPriceRange": "faixa de preco recomendada em BRL",
+  "profitMarginPercentage": "percentual de ganho sobre o custo atual",
   "targetAudience": "descricao do publico ideal",
   "bestSalesChannels": ["canal 1", "canal 2", "canal 3"],
   "suggestedMaterials": [
@@ -411,13 +460,76 @@ router.post('/product-analysis', async (req, res, next) => {
       payload = toProductFallback(product, rawResponse);
     }
 
+    const normalizedAnalysis = normalizeStoredProductAnalysis(product, payload);
     const timestamps = await saveProductAnalysis({
       userId,
       productId,
-      analysis: payload,
+      analysis: normalizedAnalysis.analysis,
     });
 
-    res.json(normalizeStoredProductAnalysis(product, payload, timestamps));
+    res.json({
+      ...normalizedAnalysis,
+      createdAt: Number(timestamps.createdAt || normalizedAnalysis.createdAt),
+      updatedAt: Number(timestamps.updatedAt || normalizedAnalysis.updatedAt),
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.post('/product-analysis/search', async (req, res, next) => {
+  const query = String(req.body?.query || '').trim();
+  const baseCost = parseOptionalMoneyValue(req.body?.baseCost);
+  const sellingPrice = parseOptionalMoneyValue(req.body?.sellingPrice);
+
+  if (query.length < 2) {
+    return res.status(400).json({ error: 'Informe um produto para a busca livre.' });
+  }
+
+  if (Number.isNaN(baseCost) || Number.isNaN(sellingPrice)) {
+    return res.status(400).json({ error: 'Valores invalidos para custo ou venda.' });
+  }
+
+  try {
+    const product = {
+      id: 0,
+      name: query,
+      baseCost,
+      sellingPrice,
+      stockCount: 0,
+      description: String(req.body?.description || '').trim(),
+      supplies: parseSuppliesText(req.body?.suppliesText),
+    };
+
+    const rawResponse = await askForJson(
+      buildProductPrompt({
+        product,
+        productOrders: [],
+        paidOrders: [],
+        totalUnitsSold: 0,
+        grossRevenue: 0,
+        recentOrders: [],
+      }),
+    );
+
+    let payload;
+    try {
+      payload = extractJsonPayload(rawResponse);
+    } catch (_error) {
+      payload = toProductFallback(product, rawResponse);
+    }
+
+    const now = Date.now();
+    const normalizedAnalysis = normalizeStoredProductAnalysis(product, payload, {
+      createdAt: now,
+      updatedAt: now,
+    });
+    normalizedAnalysis.analysis.warnings = [
+      'Analise gerada por busca livre. Cadastre o produto se quiser salvar o historico.',
+      ...normalizedAnalysis.analysis.warnings,
+    ];
+
+    res.json(normalizedAnalysis);
   } catch (error) {
     next(error);
   }

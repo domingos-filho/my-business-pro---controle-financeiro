@@ -93,6 +93,7 @@ export interface AiProductAnalysis {
   productName: string;
   positioningSummary: string;
   idealPriceRange: string;
+  profitMarginPercentage: string;
   targetAudience: string;
   bestSalesChannels: string[];
   suggestedMaterials: AiSuggestedMaterial[];

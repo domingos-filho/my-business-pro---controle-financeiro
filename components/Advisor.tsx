@@ -30,6 +30,14 @@ const parseProductId = (value: string) => {
   return Number.isInteger(parsed) && parsed > 0 ? parsed : 0;
 };
 
+const parseOptionalMoneyInput = (value: string) => {
+  const normalized = String(value || '').trim().replace(',', '.');
+  if (!normalized) return undefined;
+
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) ? parsed : undefined;
+};
+
 const AnalysisDetails: React.FC<{ item: StoredAiProductAnalysis }> = ({ item }) => {
   const { analysis } = item;
 
@@ -59,10 +67,17 @@ const AnalysisDetails: React.FC<{ item: StoredAiProductAnalysis }> = ({ item }) 
         </div>
         <div className="bg-white border border-slate-100 rounded-2xl p-5">
           <h5 className="text-sm font-black uppercase tracking-widest text-slate-400 mb-3">
-            Publico ideal
+            Ganho sobre o custo
           </h5>
-          <p className="text-slate-700 leading-7">{analysis.targetAudience}</p>
+          <p className="text-emerald-600 font-black text-lg">{analysis.profitMarginPercentage}</p>
         </div>
+      </div>
+
+      <div className="bg-white border border-slate-100 rounded-2xl p-5">
+        <h5 className="text-sm font-black uppercase tracking-widest text-slate-400 mb-3">
+          Publico ideal
+        </h5>
+        <p className="text-slate-700 leading-7">{analysis.targetAudience}</p>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2">
@@ -160,10 +175,17 @@ const AnalysisDetails: React.FC<{ item: StoredAiProductAnalysis }> = ({ item }) 
 
 export const Advisor: React.FC = () => {
   const [products, setProducts] = useState<Product[]>([]);
+  const [analysisMode, setAnalysisMode] = useState<'catalog' | 'search'>('catalog');
   const [selectedProductId, setSelectedProductId] = useState<number>(0);
   const [selectedSavedProductId, setSelectedSavedProductId] = useState<number>(0);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchBaseCost, setSearchBaseCost] = useState('');
+  const [searchSellingPrice, setSearchSellingPrice] = useState('');
+  const [searchDescription, setSearchDescription] = useState('');
+  const [searchSuppliesText, setSearchSuppliesText] = useState('');
   const [overviewInsight, setOverviewInsight] = useState<AiBusinessInsight | null>(null);
   const [latestProductAnalysis, setLatestProductAnalysis] = useState<StoredAiProductAnalysis | null>(null);
+  const [latestAnalysisSource, setLatestAnalysisSource] = useState<'catalog' | 'search' | null>(null);
   const [savedAnalyses, setSavedAnalyses] = useState<StoredAiProductAnalysis[]>([]);
   const [modalAnalysis, setModalAnalysis] = useState<StoredAiProductAnalysis | null>(null);
   const [loadingOverview, setLoadingOverview] = useState(false);
@@ -238,21 +260,40 @@ export const Advisor: React.FC = () => {
   };
 
   const handleProductAnalysis = async () => {
-    if (!selectedProductId) {
-      setError('Selecione um produto para analisar.');
-      return;
-    }
-
     setError('');
     setLoadingProduct(true);
     try {
-      const storedAnalysis = await AdvisorService.analyzeProduct(selectedProductId);
-      setLatestProductAnalysis(storedAnalysis);
-      setSelectedSavedProductId(storedAnalysis.productId);
-      setSavedAnalyses((current) => {
-        const next = current.filter((item) => item.productId !== storedAnalysis.productId);
-        return [storedAnalysis, ...next].sort((left, right) => right.updatedAt - left.updatedAt);
-      });
+      if (analysisMode === 'catalog') {
+        if (!selectedProductId) {
+          setError('Selecione um produto para analisar.');
+          return;
+        }
+
+        const storedAnalysis = await AdvisorService.analyzeProduct(selectedProductId);
+        setLatestProductAnalysis(storedAnalysis);
+        setLatestAnalysisSource('catalog');
+        setSelectedSavedProductId(storedAnalysis.productId);
+        setSavedAnalyses((current) => {
+          const next = current.filter((item) => item.productId !== storedAnalysis.productId);
+          return [storedAnalysis, ...next].sort((left, right) => right.updatedAt - left.updatedAt);
+        });
+      } else {
+        if (!searchQuery.trim()) {
+          setError('Informe o produto que deseja pesquisar na busca livre.');
+          return;
+        }
+
+        const storedAnalysis = await AdvisorService.analyzeFreeSearchProduct({
+          query: searchQuery.trim(),
+          baseCost: parseOptionalMoneyInput(searchBaseCost),
+          sellingPrice: parseOptionalMoneyInput(searchSellingPrice),
+          description: searchDescription.trim() || undefined,
+          suppliesText: searchSuppliesText.trim() || undefined,
+        });
+
+        setLatestProductAnalysis(storedAnalysis);
+        setLatestAnalysisSource('search');
+      }
     } catch (requestError: any) {
       setError(requestError?.message || 'Nao foi possivel analisar o produto agora.');
     } finally {
@@ -393,38 +434,150 @@ export const Advisor: React.FC = () => {
                     Nova analise
                   </h4>
                   <p className="text-sm text-slate-500 mt-2">
-                    Se rodar novamente para o mesmo produto, a analise anterior sera substituida pela nova.
+                    Analise um produto cadastrado ou use uma busca livre para estudar um produto que ainda nao esta no catalogo.
                   </p>
                 </div>
 
-                <div>
-                  <label className="block text-[11px] font-black text-slate-400 uppercase tracking-widest ml-1 mb-2">
-                    Produto
-                  </label>
-                  <select
-                    value={selectedProductId}
-                    onChange={(event) => setSelectedProductId(parseProductId(event.target.value))}
-                    className="w-full rounded-2xl border border-slate-200 bg-white p-3.5 text-slate-900 font-medium outline-none focus:ring-2 focus:ring-indigo-500"
+                <div className="grid grid-cols-2 gap-2 rounded-2xl bg-white p-1 border border-slate-200">
+                  <button
+                    type="button"
+                    onClick={() => setAnalysisMode('catalog')}
+                    className={`rounded-xl px-4 py-2.5 text-sm font-black transition-all ${
+                      analysisMode === 'catalog'
+                        ? 'bg-slate-950 text-white shadow-sm'
+                        : 'text-slate-500 hover:text-slate-900'
+                    }`}
                   >
-                    {products.length === 0 ? (
-                      <option value="0">Nenhum produto cadastrado</option>
-                    ) : (
-                      products.map((product) => (
-                        <option key={product.id} value={product.id}>
-                          {product.name}
-                        </option>
-                      ))
-                    )}
-                  </select>
+                    Produto cadastrado
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setAnalysisMode('search')}
+                    className={`rounded-xl px-4 py-2.5 text-sm font-black transition-all ${
+                      analysisMode === 'search'
+                        ? 'bg-slate-950 text-white shadow-sm'
+                        : 'text-slate-500 hover:text-slate-900'
+                    }`}
+                  >
+                    Busca livre
+                  </button>
                 </div>
+
+                {analysisMode === 'catalog' ? (
+                  <div className="space-y-4">
+                    <p className="text-sm text-slate-500">
+                      Se rodar novamente para o mesmo produto, a analise anterior sera substituida pela nova.
+                    </p>
+
+                    <div>
+                      <label className="block text-[11px] font-black text-slate-400 uppercase tracking-widest ml-1 mb-2">
+                        Produto
+                      </label>
+                      <select
+                        value={selectedProductId}
+                        onChange={(event) => setSelectedProductId(parseProductId(event.target.value))}
+                        className="w-full rounded-2xl border border-slate-200 bg-white p-3.5 text-slate-900 font-medium outline-none focus:ring-2 focus:ring-indigo-500"
+                      >
+                        {products.length === 0 ? (
+                          <option value="0">Nenhum produto cadastrado</option>
+                        ) : (
+                          products.map((product) => (
+                            <option key={product.id} value={product.id}>
+                              {product.name}
+                            </option>
+                          ))
+                        )}
+                      </select>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-[11px] font-black text-slate-400 uppercase tracking-widest ml-1 mb-2">
+                        Busca do produto
+                      </label>
+                      <input
+                        type="text"
+                        value={searchQuery}
+                        onChange={(event) => setSearchQuery(event.target.value)}
+                        className="w-full rounded-2xl border border-slate-200 bg-white p-3.5 text-slate-900 font-medium outline-none focus:ring-2 focus:ring-indigo-500"
+                        placeholder="Ex: squeezes personalizados para academia"
+                      />
+                    </div>
+
+                    <div className="grid gap-4 md:grid-cols-2">
+                      <div>
+                        <label className="block text-[11px] font-black text-slate-400 uppercase tracking-widest ml-1 mb-2">
+                          Custo de producao (R$)
+                        </label>
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          inputMode="decimal"
+                          value={searchBaseCost}
+                          onChange={(event) => setSearchBaseCost(event.target.value)}
+                          className="w-full rounded-2xl border border-slate-200 bg-white p-3.5 text-slate-900 font-medium outline-none focus:ring-2 focus:ring-indigo-500"
+                          placeholder="Opcional"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] font-black text-slate-400 uppercase tracking-widest ml-1 mb-2">
+                          Valor final (R$)
+                        </label>
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          inputMode="decimal"
+                          value={searchSellingPrice}
+                          onChange={(event) => setSearchSellingPrice(event.target.value)}
+                          className="w-full rounded-2xl border border-slate-200 bg-white p-3.5 text-slate-900 font-medium outline-none focus:ring-2 focus:ring-indigo-500"
+                          placeholder="Opcional"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-black text-slate-400 uppercase tracking-widest ml-1 mb-2">
+                        Descricao
+                      </label>
+                      <textarea
+                        value={searchDescription}
+                        onChange={(event) => setSearchDescription(event.target.value)}
+                        className="w-full min-h-28 rounded-2xl border border-slate-200 bg-white p-3.5 text-slate-900 font-medium outline-none resize-y focus:ring-2 focus:ring-indigo-500"
+                        placeholder="Explique o produto, acabamento, proposta e contexto de uso."
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-black text-slate-400 uppercase tracking-widest ml-1 mb-2">
+                        Insumos principais
+                      </label>
+                      <textarea
+                        value={searchSuppliesText}
+                        onChange={(event) => setSearchSuppliesText(event.target.value)}
+                        className="w-full min-h-24 rounded-2xl border border-slate-200 bg-white p-3.5 text-slate-900 font-medium outline-none resize-y focus:ring-2 focus:ring-indigo-500"
+                        placeholder="Separe por virgula ou linha. Ex: vidro 250ml, etiqueta adesiva, fita de cetim"
+                      />
+                    </div>
+                  </div>
+                )}
 
                 <button
                   onClick={handleProductAnalysis}
-                  disabled={loadingProduct || products.length === 0}
+                  disabled={loadingProduct || (analysisMode === 'catalog' && products.length === 0)}
                   className="inline-flex items-center gap-2 bg-slate-950 text-white px-5 py-3 rounded-2xl font-bold shadow-lg hover:bg-slate-800 transition-all active:scale-95 disabled:opacity-60"
                 >
                   <SparklesIcon className="w-4 h-4" />
-                  <span>{loadingProduct ? 'Analisando produto...' : 'Analisar produto com IA'}</span>
+                  <span>
+                    {loadingProduct
+                      ? 'Analisando produto...'
+                      : analysisMode === 'catalog'
+                        ? 'Analisar produto com IA'
+                        : 'Analisar busca livre com IA'}
+                  </span>
                 </button>
               </div>
 
@@ -476,7 +629,7 @@ export const Advisor: React.FC = () => {
               </div>
             </div>
 
-            {products.length === 0 && (
+            {analysisMode === 'catalog' && products.length === 0 && (
               <p className="text-sm text-slate-400">
                 Cadastre pelo menos um produto para usar esta analise.
               </p>
@@ -491,7 +644,9 @@ export const Advisor: React.FC = () => {
                       <span>Ultima analise gerada</span>
                     </div>
                     <p className="text-sm text-slate-500 mt-2">
-                      Esta leitura ja foi salva e pode ser reaberta depois em analises salvas.
+                      {latestAnalysisSource === 'catalog'
+                        ? 'Esta leitura ja foi salva e pode ser reaberta depois em analises salvas.'
+                        : 'Esta leitura veio de busca livre e nao foi salva automaticamente.'}
                     </p>
                   </div>
                   <button
