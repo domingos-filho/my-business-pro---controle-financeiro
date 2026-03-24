@@ -42,6 +42,13 @@ export interface Product extends BaseEntity {
   sellingPrice: number;
   stockCount: number;
   description?: string;
+  supplies?: ProductSupply[];
+}
+
+export interface ProductSupply {
+  name: string;
+  quantity?: string;
+  unit?: string;
 }
 
 export interface Order extends BaseEntity {

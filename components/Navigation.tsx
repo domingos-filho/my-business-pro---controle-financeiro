@@ -29,7 +29,7 @@ export const Navigation: React.FC<NavigationProps> = ({ currentView, setView }) 
   const items: NavItem[] = [
     { id: 'dashboard', label: 'INICIO', icon: HomeIcon },
     { id: 'sales', label: 'VENDAS', icon: SalesIcon },
-    { id: 'products', label: 'ITENS', icon: BoxIcon },
+    { id: 'products', label: 'PRODUTOS', icon: BoxIcon },
     { id: 'customers', label: 'CLIENTES', icon: UsersIcon },
     { id: 'expenses', label: 'CAIXA', icon: WalletIcon },
     { id: 'categories', label: 'CATEGORIAS', icon: TagIcon },

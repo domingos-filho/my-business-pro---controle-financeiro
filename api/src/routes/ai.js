@@ -242,6 +242,15 @@ Produto:
 - Custo base atual: R$ ${product.baseCost.toFixed(2)}
 - Estoque atual: ${product.stockCount}
 - Descricao cadastrada: ${product.description || 'Sem descricao'}
+- Insumos cadastrados: ${
+    Array.isArray(product.supplies) && product.supplies.length
+      ? product.supplies
+          .map((item) =>
+            [item.name, item.quantity, item.unit].filter(Boolean).join(' ')
+          )
+          .join('; ')
+      : 'Sem insumos cadastrados'
+  }
 
 Historico:
 - Pedidos totais do produto: ${productOrders.length}

@@ -18,6 +18,16 @@ import { Sales } from './components/Sales';
 import { AuthService, User } from './services/AuthService';
 import { SyncService, SyncStats } from './services/SyncService';
 
+const VIEW_LABELS: Record<string, string> = {
+  dashboard: 'Inicio',
+  sales: 'Vendas',
+  products: 'Produtos',
+  customers: 'Clientes',
+  expenses: 'Caixa',
+  categories: 'Categorias',
+  ai: 'IA',
+};
+
 const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
@@ -154,6 +164,7 @@ const App: React.FC = () => {
   const avatarSrc =
     user.avatar ??
     `https://ui-avatars.com/api/?name=${encodeURIComponent(user.name)}&background=6366f1&color=fff`;
+  const currentViewLabel = VIEW_LABELS[currentView] || currentView;
 
   return (
     <div className="min-h-screen bg-[#fcfcfd] flex flex-col md:flex-row overflow-hidden">
@@ -168,7 +179,7 @@ const App: React.FC = () => {
 
             <div className="hidden md:block">
               <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">
-                Workspace / {currentView}
+                Workspace / {currentViewLabel}
               </p>
             </div>
 
