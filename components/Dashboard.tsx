@@ -40,7 +40,7 @@ export const Dashboard: React.FC = () => {
     <div className="space-y-10 pb-10 animate-fadeIn">
       <header>
         <h1 className="text-4xl font-black text-slate-950 tracking-tighter leading-none mb-1">
-          Seu Negocio.
+          Seu Negócio.
         </h1>
         <p className="text-slate-400 font-medium">
           Panorama financeiro de{' '}
@@ -67,7 +67,7 @@ export const Dashboard: React.FC = () => {
             </div>
             <div>
               <span className="text-[10px] font-bold text-slate-500 uppercase block">
-                Gastos Mensal
+                Gasto mensal
               </span>
               <span className="text-lg font-bold text-rose-400">
                 -{formatCurrency(summary.monthlyExpenses)}
@@ -87,7 +87,7 @@ export const Dashboard: React.FC = () => {
               Performance Mensal
             </h3>
             <span className="text-slate-300 text-[10px] font-bold uppercase tracking-widest">
-              Grafico de Fluxo
+              Gráfico de fluxo
             </span>
           </div>
           <div className="flex-1 mt-6">
@@ -126,8 +126,8 @@ export const Dashboard: React.FC = () => {
           <div>
             <p className="text-xl font-black leading-tight tracking-tight">
               {summary.monthlyIncome > 0
-                ? `Sua margem esta em ${((summary.monthlyProfit / summary.monthlyIncome) * 100).toFixed(0)}%. Mantenha o ritmo!`
-                : 'Inicie suas vendas para ver a analise.'}
+                ? `Sua margem está em ${((summary.monthlyProfit / summary.monthlyIncome) * 100).toFixed(0)}%. Mantenha o ritmo!`
+                : 'Inicie suas vendas para ver a análise.'}
             </p>
             <button className="mt-4 inline-flex items-center gap-2 text-xs font-bold border-b border-white/50 pb-1 hover:border-white transition-colors">
               <span>Ver Mentor Inteligente</span>
@@ -139,3 +139,4 @@ export const Dashboard: React.FC = () => {
     </div>
   );
 };
+

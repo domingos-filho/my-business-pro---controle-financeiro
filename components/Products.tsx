@@ -2,6 +2,12 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { BoxIcon, EditIcon, SparklesIcon, TrashIcon, XIcon } from './AppIcons';
 import { ProductRepo } from '../repositories';
 import { Product, ProductSupply } from '../types';
+import {
+  normalizeMultilineText,
+  normalizeText,
+  parseNonNegativeFloat,
+  parseNonNegativeInteger,
+} from '../utils/input';
 
 interface ProductFormState {
   name: string;
@@ -39,28 +45,12 @@ const mapProductToForm = (product: Product): ProductFormState => ({
     : [],
 });
 
-const parseIntegerOrZero = (value: string) => {
-  const normalized = String(value || '').trim();
-  if (!normalized) return 0;
-
-  const parsed = Number.parseInt(normalized, 10);
-  return Number.isFinite(parsed) ? parsed : 0;
-};
-
-const parseFloatOrZero = (value: string) => {
-  const normalized = String(value || '').trim().replace(',', '.');
-  if (!normalized) return 0;
-
-  const parsed = Number.parseFloat(normalized);
-  return Number.isFinite(parsed) ? parsed : 0;
-};
-
 const sanitizeSupplies = (supplies: ProductSupply[]) =>
   supplies
     .map((item) => ({
-      name: String(item.name || '').trim(),
-      quantity: String(item.quantity || '').trim(),
-      unit: String(item.unit || '').trim(),
+      name: normalizeText(String(item.name || ''), 120),
+      quantity: normalizeText(String(item.quantity || ''), 30),
+      unit: normalizeText(String(item.unit || ''), 30),
     }))
     .filter((item) => item.name)
     .map((item) => ({
@@ -144,16 +134,17 @@ export const Products: React.FC = () => {
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (!formData.name.trim()) return;
+    const normalizedName = normalizeText(formData.name, 140);
+    if (normalizedName.length < 2) return;
 
     setLoading(true);
     try {
       const payload = {
-        name: formData.name.trim(),
-        baseCost: parseFloatOrZero(formData.baseCost),
-        sellingPrice: parseFloatOrZero(formData.sellingPrice),
-        stockCount: parseIntegerOrZero(formData.stockCount),
-        description: formData.description.trim() || undefined,
+        name: normalizedName,
+        baseCost: parseNonNegativeFloat(formData.baseCost),
+        sellingPrice: parseNonNegativeFloat(formData.sellingPrice),
+        stockCount: parseNonNegativeInteger(formData.stockCount),
+        description: normalizeMultilineText(formData.description, 1000) || undefined,
         supplies: sanitizeSupplies(formData.supplies),
       };
 
@@ -188,14 +179,14 @@ export const Products: React.FC = () => {
         <div>
           <h2 className="text-3xl font-black text-slate-900 tracking-tight">Produtos</h2>
           <p className="text-slate-500 text-sm font-medium">
-            Cadastre, edite e organize seu catalogo com estoque, valor, descricao e insumos.
+            Cadastre, edite e organize seu catálogo com estoque, valor, descrição e insumos.
           </p>
         </div>
 
         <div className="flex flex-col md:items-end gap-2">
           <div className="text-right">
             <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">
-              Catalogo
+              Catálogo
             </p>
             <p className="text-sm font-bold text-slate-600">
               {products.length} produto(s) e {totalSupplies} insumo(s) cadastrado(s)
@@ -255,8 +246,15 @@ export const Products: React.FC = () => {
                 type="text"
                 value={formData.name}
                 onChange={(event) => setFormData((current) => ({ ...current, name: event.target.value }))}
+                onBlur={(event) =>
+                  setFormData((current) => ({
+                    ...current,
+                    name: normalizeText(event.target.value, 140),
+                  }))
+                }
                 className={inputClasses}
                 placeholder="Ex: Caneca personalizada BTS"
+                maxLength={140}
                 required
               />
             </div>
@@ -274,12 +272,13 @@ export const Products: React.FC = () => {
                 }
                 className={inputClasses}
                 placeholder="0"
+                inputMode="numeric"
               />
             </div>
 
             <div className="space-y-1.5">
               <label className="block text-[11px] font-black text-slate-400 uppercase tracking-widest ml-1">
-                Custo de Producao (R$)
+                Custo de produção (R$)
               </label>
               <input
                 type="number"
@@ -315,15 +314,22 @@ export const Products: React.FC = () => {
 
             <div className="md:col-span-2 space-y-1.5">
               <label className="block text-[11px] font-black text-slate-400 uppercase tracking-widest ml-1">
-                Descricao do Produto / Fabricacao
+                Descrição do produto / fabricação
               </label>
               <textarea
                 value={formData.description}
                 onChange={(event) =>
                   setFormData((current) => ({ ...current, description: event.target.value }))
                 }
+                onBlur={(event) =>
+                  setFormData((current) => ({
+                    ...current,
+                    description: normalizeMultilineText(event.target.value, 1000),
+                  }))
+                }
                 className={`${inputClasses} min-h-32 resize-y`}
-                placeholder="Descreva o produto, acabamento, observacoes e como ele e fabricado."
+                placeholder="Descreva o produto, acabamento, observações e como ele é fabricado."
+                maxLength={1000}
               />
             </div>
           </div>
@@ -333,7 +339,7 @@ export const Products: React.FC = () => {
               <div>
                 <h4 className="text-base font-black text-slate-900">Insumos</h4>
                 <p className="text-sm text-slate-500">
-                  Liste os itens necessarios para produzir este produto.
+                  Liste os itens necessários para produzir este produto.
                 </p>
               </div>
 
@@ -367,6 +373,7 @@ export const Products: React.FC = () => {
                         onChange={(event) => handleSupplyChange(index, 'name', event.target.value)}
                         className={inputClasses}
                         placeholder="Ex: Caneca branca 325ml"
+                        maxLength={120}
                       />
                     </div>
 
@@ -382,6 +389,7 @@ export const Products: React.FC = () => {
                         }
                         className={inputClasses}
                         placeholder="Ex: 1"
+                        maxLength={30}
                       />
                     </div>
 
@@ -395,6 +403,7 @@ export const Products: React.FC = () => {
                         onChange={(event) => handleSupplyChange(index, 'unit', event.target.value)}
                         className={inputClasses}
                         placeholder="Ex: unid."
+                        maxLength={30}
                       />
                     </div>
 
@@ -422,8 +431,8 @@ export const Products: React.FC = () => {
             {loading
               ? 'Salvando...'
               : editingProduct
-                ? 'Salvar Alteracoes do Produto'
-                : 'Salvar Produto'}
+                ? 'Salvar alterações do produto'
+                : 'Salvar produto'}
           </button>
         </form>
       )}
@@ -495,10 +504,10 @@ export const Products: React.FC = () => {
               <div className="grid gap-4 xl:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]">
                 <div className="rounded-2xl border border-slate-100 bg-slate-50/60 px-4 py-4">
                   <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 mb-3">
-                    Descricao
+                    Descrição
                   </p>
                   <p className="text-sm text-slate-600 leading-6">
-                    {product.description || 'Sem descricao cadastrada.'}
+                    {product.description || 'Sem descrição cadastrada.'}
                   </p>
                 </div>
 
@@ -537,7 +546,7 @@ export const Products: React.FC = () => {
             <BoxIcon className="w-14 h-14 mx-auto mb-4 text-slate-300" />
             <h3 className="text-xl font-black text-slate-800">Nenhum produto cadastrado</h3>
             <p className="text-slate-400 font-medium max-w-sm mx-auto mt-2 px-6">
-              Cadastre seu primeiro produto para controlar estoque, valor de venda, descricao e insumos.
+              Cadastre seu primeiro produto para controlar estoque, valor de venda, descrição e insumos.
             </p>
             <button
               onClick={handleOpenCreate}
@@ -551,3 +560,4 @@ export const Products: React.FC = () => {
     </div>
   );
 };
+

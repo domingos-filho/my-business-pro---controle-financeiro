@@ -11,6 +11,7 @@ import {
 } from './AppIcons';
 import { CategoryRepo } from '../repositories';
 import { Category, TransactionType } from '../types';
+import { normalizeText } from '../utils/input';
 
 const COLOR_PRESETS = ['#4F46E5', '#10B981', '#F43F5E', '#F59E0B', '#3B82F6', '#8B5CF6', '#06B6D4', '#EC4899'];
 
@@ -65,19 +66,20 @@ export const Categories: React.FC = () => {
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (!formData.name) return;
+    const normalizedName = normalizeText(formData.name || '', 80);
+    if (normalizedName.length < 2) return;
 
     setLoading(true);
     try {
       if (editingCategory?.id) {
         await CategoryRepo.update(editingCategory.id, {
-          name: formData.name,
+          name: normalizedName,
           type: formData.type || TransactionType.EXPENSE,
           color: formData.color || COLOR_PRESETS[0],
         });
       } else {
         await CategoryRepo.create({
-          name: formData.name,
+          name: normalizedName,
           type: formData.type || TransactionType.EXPENSE,
           color: formData.color || COLOR_PRESETS[0],
         });
@@ -97,7 +99,7 @@ export const Categories: React.FC = () => {
   const handleDelete = async (id: number) => {
     if (
       confirm(
-        'Deseja excluir esta categoria? Transacoes existentes manterao seus dados, mas a categoria nao podera mais ser selecionada.',
+        'Deseja excluir esta categoria? Transações existentes manterão seus dados, mas a categoria não poderá mais ser selecionada.',
       )
     ) {
       await CategoryRepo.softDelete(id);
@@ -114,7 +116,7 @@ export const Categories: React.FC = () => {
         <div>
           <h2 className="text-3xl font-black text-slate-900 tracking-tight">Tags & Categorias</h2>
           <p className="text-slate-500 text-sm font-medium">
-            Categorias padrao ficam disponiveis para todos. As que voce criar ficam so na sua conta.
+            Categorias padrão ficam disponíveis para todos. As que você criar ficam só na sua conta.
           </p>
         </div>
         <button
@@ -163,8 +165,15 @@ export const Categories: React.FC = () => {
                   type="text"
                   value={formData.name}
                   onChange={(event) => setFormData({ ...formData, name: event.target.value })}
+                  onBlur={(event) =>
+                    setFormData((current) => ({
+                      ...current,
+                      name: normalizeText(event.target.value, 80),
+                    }))
+                  }
                   className={inputClasses}
-                  placeholder="Ex: Materia-prima"
+                  placeholder="Ex: Matéria-prima"
+                  maxLength={80}
                   required
                 />
               </div>
@@ -204,7 +213,7 @@ export const Categories: React.FC = () => {
 
             <div className="space-y-1.5">
               <label className="block text-[11px] font-black text-slate-400 uppercase tracking-widest ml-1">
-                Cor de Identificacao
+                Cor de identificação
               </label>
               <div className="grid grid-cols-4 gap-3 bg-slate-50/50 p-4 rounded-3xl border border-slate-100">
                 {COLOR_PRESETS.map((color) => (
@@ -229,7 +238,7 @@ export const Categories: React.FC = () => {
             disabled={loading}
             className="w-full bg-slate-950 text-white py-4.5 rounded-2xl font-black hover:bg-slate-800 transition-all active:scale-[0.98] shadow-xl text-lg mt-2"
           >
-            {loading ? 'Processando...' : editingCategory ? 'Salvar Alteracoes' : 'Confirmar Categoria'}
+            {loading ? 'Processando...' : editingCategory ? 'Salvar alterações' : 'Confirmar categoria'}
           </button>
         </form>
       )}
@@ -278,7 +287,7 @@ export const Categories: React.FC = () => {
                           : 'bg-indigo-50 text-indigo-600 border-indigo-100'
                       }`}
                     >
-                      {category.isSystem ? 'Padrao Global' : 'Sua Categoria'}
+                      {category.isSystem ? 'Padrão global' : 'Sua categoria'}
                     </span>
                   </div>
                 </div>
@@ -317,7 +326,7 @@ export const Categories: React.FC = () => {
             </div>
             <h3 className="text-xl font-black text-slate-800">Sem categorias</h3>
             <p className="text-slate-400 font-medium max-w-xs mx-auto mt-2 px-6">
-              Organize suas movimentacoes para entender melhor sua lucratividade.
+              Organize suas movimentações para entender melhor sua lucratividade.
             </p>
             <button
               onClick={handleOpenAdd}
@@ -331,3 +340,4 @@ export const Categories: React.FC = () => {
     </div>
   );
 };
+

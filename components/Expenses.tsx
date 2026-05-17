@@ -9,6 +9,11 @@ import {
 import { CategoryRepo, TransactionRepo } from '../repositories';
 import { TransactionService } from '../services/TransactionService';
 import { Category, Transaction, TransactionType } from '../types';
+import {
+  normalizeMultilineText,
+  parseNonNegativeFloat,
+  parsePositiveInteger,
+} from '../utils/input';
 
 export const Expenses: React.FC = () => {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
@@ -37,16 +42,6 @@ export const Expenses: React.FC = () => {
     loadData();
   }, []);
 
-  const parseIntegerOrZero = (value: string) => {
-    const parsed = Number.parseInt(value, 10);
-    return Number.isFinite(parsed) ? parsed : 0;
-  };
-
-  const parseFloatOrZero = (value: string) => {
-    const parsed = Number.parseFloat(value);
-    return Number.isFinite(parsed) ? parsed : 0;
-  };
-
   const filteredCategories = useMemo(
     () => categories.filter((category) => category.type === formData.type),
     [categories, formData.type],
@@ -54,7 +49,8 @@ export const Expenses: React.FC = () => {
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (!formData.description || formData.amount <= 0 || formData.categoryId === 0) {
+    const normalizedDescription = normalizeMultilineText(formData.description, 220);
+    if (!normalizedDescription || formData.amount <= 0 || formData.categoryId === 0) {
       alert('Por favor, preencha todos os campos e selecione uma categoria.');
       return;
     }
@@ -63,7 +59,7 @@ export const Expenses: React.FC = () => {
     try {
       const payload = {
         amount: formData.amount,
-        description: formData.description,
+        description: normalizedDescription,
         categoryId: formData.categoryId,
         date: new Date(formData.date).getTime(),
       };
@@ -91,7 +87,7 @@ export const Expenses: React.FC = () => {
   };
 
   const handleDelete = async (id: number) => {
-    if (confirm('Deseja excluir esta movimentacao?')) {
+    if (confirm('Deseja excluir esta movimentação?')) {
       await TransactionService.deleteTransaction(id);
       loadData();
     }
@@ -104,14 +100,14 @@ export const Expenses: React.FC = () => {
     <div className="space-y-6 animate-fadeIn">
       <div className="flex justify-between items-center">
         <div>
-          <h2 className="text-2xl font-bold text-slate-900">Movimentacoes Financeiras</h2>
-          <p className="text-slate-500 text-sm">Registre entradas e saidas manuais do seu caixa</p>
+          <h2 className="text-2xl font-bold text-slate-900">Movimentações financeiras</h2>
+          <p className="text-slate-500 text-sm">Registre entradas e saídas manuais do seu caixa</p>
         </div>
         <button
           onClick={() => setShowForm(!showForm)}
           className={`${showForm ? 'bg-slate-200 text-slate-700' : 'bg-slate-900 text-white shadow-slate-200'} px-5 py-2.5 rounded-2xl font-bold shadow-lg transition-all active:scale-95`}
         >
-          {showForm ? 'Fechar' : '+ Nova Movimentacao'}
+          {showForm ? 'Fechar' : '+ Nova movimentação'}
         </button>
       </div>
 
@@ -123,7 +119,7 @@ export const Expenses: React.FC = () => {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
             <div className="md:col-span-2">
               <label className="block text-xs font-bold text-slate-500 uppercase ml-1 mb-2">
-                Tipo de Movimentacao
+                Tipo de movimentação
               </label>
               <div className="grid grid-cols-2 gap-3">
                 <button
@@ -152,7 +148,7 @@ export const Expenses: React.FC = () => {
                   }`}
                 >
                   <ExpenseIcon className="w-4 h-4" />
-                  <span>Saida (Despesa)</span>
+                  <span>Saída (Despesa)</span>
                 </button>
               </div>
             </div>
@@ -164,7 +160,10 @@ export const Expenses: React.FC = () => {
               <select
                 value={formData.categoryId}
                 onChange={(event) =>
-                  setFormData({ ...formData, categoryId: parseIntegerOrZero(event.target.value) })
+                    setFormData({
+                      ...formData,
+                      categoryId: parsePositiveInteger(event.target.value),
+                    })
                 }
                 className={inputClasses}
                 required
@@ -202,7 +201,7 @@ export const Expenses: React.FC = () => {
 
             <div className="md:col-span-2">
               <label className="block text-xs font-bold text-slate-500 uppercase ml-1 mb-1">
-                Descricao / Motivo
+                Descrição / motivo
               </label>
               <input
                 type="text"
@@ -210,8 +209,15 @@ export const Expenses: React.FC = () => {
                 onChange={(event) =>
                   setFormData({ ...formData, description: event.target.value })
                 }
+                onBlur={(event) =>
+                  setFormData((current) => ({
+                    ...current,
+                    description: normalizeMultilineText(event.target.value, 220),
+                  }))
+                }
                 className={inputClasses}
                 placeholder="Ex: Pagamento de aluguel, venda avulsa..."
+                maxLength={220}
                 required
               />
             </div>
@@ -225,10 +231,14 @@ export const Expenses: React.FC = () => {
                 step="0.01"
                 value={formData.amount}
                 onChange={(event) =>
-                  setFormData({ ...formData, amount: parseFloatOrZero(event.target.value) })
+                    setFormData({
+                      ...formData,
+                      amount: parseNonNegativeFloat(event.target.value),
+                    })
                 }
                 className={`${inputClasses} text-2xl font-black py-4`}
                 placeholder="0,00"
+                min="0"
                 required
               />
             </div>
@@ -253,7 +263,7 @@ export const Expenses: React.FC = () => {
       <div className="bg-white rounded-3xl border border-slate-200 overflow-hidden shadow-sm">
         <div className="px-6 py-4 bg-slate-50 border-b border-slate-100">
           <h3 className="text-sm font-bold text-slate-600 uppercase tracking-wider">
-            Historico de Movimentacoes
+            Histórico de movimentações
           </h3>
         </div>
         <div className="divide-y divide-slate-100">
@@ -327,7 +337,7 @@ export const Expenses: React.FC = () => {
           <div className="py-20 text-center">
             <ChartUpIcon className="w-14 h-14 mx-auto mb-4 text-slate-300" />
             <p className="text-slate-400 font-medium">
-              Nenhuma movimentacao registrada no historico.
+              Nenhuma movimentação registrada no histórico.
             </p>
           </div>
         )}
@@ -335,3 +345,4 @@ export const Expenses: React.FC = () => {
     </div>
   );
 };
+

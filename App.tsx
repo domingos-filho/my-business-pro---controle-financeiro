@@ -22,7 +22,7 @@ import { AuthService, User } from './services/AuthService';
 import { SyncService, SyncStats } from './services/SyncService';
 
 const VIEW_LABELS: Record<string, string> = {
-  dashboard: 'Inicio',
+  dashboard: 'Início',
   sales: 'Vendas',
   products: 'Produtos',
   customers: 'Clientes',
@@ -93,7 +93,7 @@ const App: React.FC = () => {
       setUser(null);
       setView('dashboard');
       setAuthLoading(false);
-      setAccessIssue(customEvent.detail || { error: 'Sua conta nao pode acessar a aplicacao.' });
+      setAccessIssue(customEvent.detail || { error: 'Sua conta não pode acessar a aplicação.' });
     };
 
     window.addEventListener('auth:access-denied', handler as EventListener);
@@ -213,7 +213,7 @@ const App: React.FC = () => {
     return (
       <div className="min-h-screen bg-slate-950 flex items-center justify-center">
         <div className="text-white text-sm font-bold uppercase tracking-widest">
-          Carregando sessao...
+          Carregando sessão...
         </div>
       </div>
     );
@@ -341,12 +341,12 @@ const App: React.FC = () => {
                     </div>
 
                     <div>
-                      <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Sincronizacao</p>
+                      <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Sincronização</p>
                       <p className="mt-1 text-sm font-medium text-slate-700">
                         {syncStats.pendingCount > 0 ? `${syncStats.pendingCount} pendente(s)` : 'Tudo sincronizado'}
                       </p>
                       <p className="mt-1 text-xs font-medium text-slate-400">
-                        Ultima sincronizacao: {formatLastSync(syncStats.lastSync)}
+                        Última sincronização: {formatLastSync(syncStats.lastSync)}
                       </p>
                     </div>
                   </div>
@@ -387,7 +387,7 @@ const App: React.FC = () => {
           >
             <span className="flex items-center gap-2 text-xs font-black uppercase tracking-widest pl-2">
               <RocketIcon className="w-4 h-4" />
-              <span>Nova versao disponivel</span>
+              <span>Nova versão disponível</span>
             </span>
             <span className="bg-white text-slate-950 px-3 py-1 rounded-full text-[10px] font-black group-hover:bg-indigo-400 transition-colors">
               ATUALIZAR
@@ -400,3 +400,4 @@ const App: React.FC = () => {
 };
 
 export default App;
+

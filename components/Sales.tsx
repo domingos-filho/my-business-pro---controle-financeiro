@@ -9,6 +9,7 @@ import {
 import { CustomerRepo, OrderRepo, ProductRepo } from '../repositories';
 import { OrderService } from '../services/OrderService';
 import { Customer, Order, Product, SaleStatus } from '../types';
+import { parsePositiveInteger } from '../utils/input';
 
 type SortField = 'date' | 'totalAmount';
 type SortDirection = 'asc' | 'desc';
@@ -49,11 +50,6 @@ export const Sales: React.FC = () => {
   useEffect(() => {
     loadData();
   }, []);
-
-  const parseIntegerOrZero = (value: string) => {
-    const parsed = Number.parseInt(value, 10);
-    return Number.isFinite(parsed) ? parsed : 0;
-  };
 
   const filteredAndSortedOrders = useMemo(() => {
     let result = [...orders];
@@ -96,14 +92,14 @@ export const Sales: React.FC = () => {
   };
 
   const handleConfirmPayment = async (id: number) => {
-    if (confirm('Confirmar recebimento deste pedido? Isso registrara a entrada no seu caixa.')) {
+    if (confirm('Confirmar recebimento deste pedido? Isso registrará a entrada no seu caixa.')) {
       setLoading(true);
       try {
         await OrderService.markAsPaid(id);
         await loadData();
       } catch (error: any) {
         console.error('Erro ao confirmar pagamento:', error);
-        alert(`Nao foi possivel confirmar o pagamento. ${error.message || 'Tente novamente.'}`);
+        alert(`Não foi possível confirmar o pagamento. ${error.message || 'Tente novamente.'}`);
       } finally {
         setLoading(false);
       }
@@ -111,7 +107,7 @@ export const Sales: React.FC = () => {
   };
 
   const handleCancel = async (id: number) => {
-    if (confirm('Deseja realmente cancelar este pedido? O estoque sera devolvido.')) {
+    if (confirm('Deseja realmente cancelar este pedido? O estoque será devolvido.')) {
       setLoading(true);
       try {
         await OrderService.cancelOrder(id);
@@ -153,7 +149,7 @@ export const Sales: React.FC = () => {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h2 className="text-3xl font-black text-slate-900 tracking-tight">Vendas</h2>
-          <p className="text-slate-500 text-sm font-medium">Gerencie suas ordens e fluxo de caixa</p>
+          <p className="text-slate-500 text-sm font-medium">Gerencie seus pedidos e o fluxo de caixa</p>
         </div>
         <button
           onClick={() => setShowForm(!showForm)}
@@ -163,7 +159,7 @@ export const Sales: React.FC = () => {
           {showForm ? (
             <>
               <XIcon className="w-4 h-4" />
-              <span>Fechar Form</span>
+              <span>Fechar formulário</span>
             </>
           ) : (
             <>
@@ -187,7 +183,7 @@ export const Sales: React.FC = () => {
               <select
                 value={formData.customerId}
                 onChange={(event) =>
-                  setFormData({ ...formData, customerId: parseIntegerOrZero(event.target.value) })
+                  setFormData({ ...formData, customerId: parsePositiveInteger(event.target.value) })
                 }
                 className={formInputClasses}
                 required
@@ -207,7 +203,7 @@ export const Sales: React.FC = () => {
               <select
                 value={formData.productId}
                 onChange={(event) =>
-                  setFormData({ ...formData, productId: parseIntegerOrZero(event.target.value) })
+                  setFormData({ ...formData, productId: parsePositiveInteger(event.target.value) })
                 }
                 className={formInputClasses}
                 required
@@ -229,9 +225,13 @@ export const Sales: React.FC = () => {
                 min="1"
                 value={formData.quantity}
                 onChange={(event) =>
-                  setFormData({ ...formData, quantity: parseIntegerOrZero(event.target.value) })
+                  setFormData({
+                    ...formData,
+                    quantity: Math.max(1, parsePositiveInteger(event.target.value, 1)),
+                  })
                 }
                 className={formInputClasses}
+                inputMode="numeric"
                 required
               />
             </div>
@@ -241,7 +241,7 @@ export const Sales: React.FC = () => {
             disabled={loading}
             className="w-full bg-slate-950 text-white py-4.5 rounded-2xl font-black hover:bg-slate-800 disabled:opacity-50 transition-all active:scale-[0.98] shadow-xl text-lg mt-4"
           >
-            {loading ? 'Processando Pedido...' : 'Confirmar Pedido'}
+            {loading ? 'Processando pedido...' : 'Confirmar pedido'}
           </button>
         </form>
       )}
@@ -357,7 +357,7 @@ export const Sales: React.FC = () => {
                 Total
               </th>
               <th className="px-8 py-5 text-[11px] font-black text-slate-400 uppercase tracking-widest text-right">
-                Acoes
+                Ações
               </th>
             </tr>
           </thead>
@@ -416,10 +416,11 @@ export const Sales: React.FC = () => {
           </div>
           <h3 className="text-xl font-black text-slate-900">Nenhum pedido</h3>
           <p className="text-slate-400 font-medium max-w-xs mx-auto mt-2">
-            Nao encontramos vendas para os filtros aplicados.
+            Não encontramos vendas para os filtros aplicados.
           </p>
         </div>
       )}
     </div>
   );
 };
+

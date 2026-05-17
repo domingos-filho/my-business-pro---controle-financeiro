@@ -10,7 +10,7 @@ interface AccessStateScreenProps {
 }
 
 const STATUS_COPY: Record<string, { title: string; accent: string }> = {
-  PENDING: { title: 'Conta aguardando aprovacao', accent: 'text-amber-500' },
+  PENDING: { title: 'Conta aguardando aprovação', accent: 'text-amber-500' },
   SUSPENDED: { title: 'Conta suspensa', accent: 'text-rose-500' },
   CANCELLED: { title: 'Conta cancelada', accent: 'text-rose-500' },
   EXPIRED: { title: 'Acesso expirado', accent: 'text-amber-500' },
@@ -24,7 +24,7 @@ export const AccessStateScreen: React.FC<AccessStateScreenProps> = ({
   onBackToLogin,
 }) => {
   const statusCopy = STATUS_COPY[String(accessStatus || '').toUpperCase()] || {
-    title: title || 'Acesso indisponivel',
+    title: title || 'Acesso indisponível',
     accent: 'text-slate-500',
   };
 
@@ -53,8 +53,8 @@ export const AccessStateScreen: React.FC<AccessStateScreenProps> = ({
           <div className="flex items-start gap-3">
             <AlertTriangleIcon className="h-5 w-5 text-amber-500 shrink-0 mt-0.5" />
             <p className="text-sm leading-6 font-medium text-amber-800">
-              Se voce acredita que isso e um erro, revise o status da conta no painel administrativo
-              ou entre em contato com o suporte responsavel pela comercializacao do sistema.
+              Se você acredita que isso é um erro, revise o status da conta no painel administrativo
+              ou entre em contato com o suporte responsável pela comercialização do sistema.
             </p>
           </div>
         </div>
@@ -70,3 +70,4 @@ export const AccessStateScreen: React.FC<AccessStateScreenProps> = ({
     </div>
   );
 };
+

@@ -15,6 +15,12 @@ import {
   Product,
   StoredAiProductAnalysis,
 } from '../types';
+import {
+  normalizeMultilineText,
+  normalizeText,
+  parseOptionalNonNegativeFloat,
+  parsePositiveInteger,
+} from '../utils/input';
 
 const formatDateTime = (timestamp: number) =>
   new Date(timestamp).toLocaleString('pt-BR', {
@@ -24,19 +30,6 @@ const formatDateTime = (timestamp: number) =>
     hour: '2-digit',
     minute: '2-digit',
   });
-
-const parseProductId = (value: string) => {
-  const parsed = Number.parseInt(value, 10);
-  return Number.isInteger(parsed) && parsed > 0 ? parsed : 0;
-};
-
-const parseOptionalMoneyInput = (value: string) => {
-  const normalized = String(value || '').trim().replace(',', '.');
-  if (!normalized) return undefined;
-
-  const parsed = Number(normalized);
-  return Number.isFinite(parsed) ? parsed : undefined;
-};
 
 const AnalysisDetails: React.FC<{ item: StoredAiProductAnalysis }> = ({ item }) => {
   const { analysis } = item;
@@ -61,7 +54,7 @@ const AnalysisDetails: React.FC<{ item: StoredAiProductAnalysis }> = ({ item }) 
       <div className="grid gap-4 md:grid-cols-2">
         <div className="bg-white border border-slate-100 rounded-2xl p-5">
           <h5 className="text-sm font-black uppercase tracking-widest text-slate-400 mb-3">
-            Preco final sugerido
+            Preço final sugerido
           </h5>
           <p className="text-slate-900 font-black text-lg">{analysis.idealPriceRange}</p>
         </div>
@@ -75,7 +68,7 @@ const AnalysisDetails: React.FC<{ item: StoredAiProductAnalysis }> = ({ item }) 
 
       <div className="bg-white border border-slate-100 rounded-2xl p-5">
         <h5 className="text-sm font-black uppercase tracking-widest text-slate-400 mb-3">
-          Publico ideal
+          Público ideal
         </h5>
         <p className="text-slate-700 leading-7">{analysis.targetAudience}</p>
       </div>
@@ -112,7 +105,7 @@ const AnalysisDetails: React.FC<{ item: StoredAiProductAnalysis }> = ({ item }) 
 
       <div className="bg-white border border-slate-100 rounded-2xl p-5">
         <h5 className="text-sm font-black uppercase tracking-widest text-slate-400 mb-4">
-          Materia-prima sugerida
+          Matéria-prima sugerida
         </h5>
         <div className="space-y-3">
           {analysis.suggestedMaterials.length > 0 ? (
@@ -132,7 +125,7 @@ const AnalysisDetails: React.FC<{ item: StoredAiProductAnalysis }> = ({ item }) 
               </div>
             ))
           ) : (
-            <p className="text-slate-400">A IA nao retornou materiais para este produto.</p>
+            <p className="text-slate-400">A IA não retornou materiais para este produto.</p>
           )}
         </div>
       </div>
@@ -140,7 +133,7 @@ const AnalysisDetails: React.FC<{ item: StoredAiProductAnalysis }> = ({ item }) 
       <div className="grid gap-4 md:grid-cols-2">
         <div className="bg-white border border-slate-100 rounded-2xl p-5">
           <h5 className="text-sm font-black uppercase tracking-widest text-slate-400 mb-3">
-            Proximos passos
+            Próximos passos
           </h5>
           <ul className="space-y-3">
             {analysis.nextSteps.map((step, index) => (
@@ -213,7 +206,7 @@ export const Advisor: React.FC = () => {
         setSelectedSavedProductId(0);
       }
     } catch (loadError: any) {
-      setError(loadError?.message || 'Nao foi possivel carregar as analises salvas.');
+      setError(loadError?.message || 'Não foi possível carregar as análises salvas.');
     } finally {
       setLoadingSavedAnalyses(false);
     }
@@ -228,7 +221,7 @@ export const Advisor: React.FC = () => {
           setSelectedProductId(productList[0].id || 0);
         }
       } catch (loadError: any) {
-        setError(loadError?.message || 'Nao foi possivel carregar os dados da IA.');
+        setError(loadError?.message || 'Não foi possível carregar os dados da IA.');
       }
     };
 
@@ -253,7 +246,7 @@ export const Advisor: React.FC = () => {
       const analysis = await AdvisorService.getBusinessInsight();
       setOverviewInsight(analysis);
     } catch (requestError: any) {
-      setError(requestError?.message || 'Nao foi possivel gerar o insight agora.');
+      setError(requestError?.message || 'Não foi possível gerar o insight agora.');
     } finally {
       setLoadingOverview(false);
     }
@@ -278,24 +271,25 @@ export const Advisor: React.FC = () => {
           return [storedAnalysis, ...next].sort((left, right) => right.updatedAt - left.updatedAt);
         });
       } else {
-        if (!searchQuery.trim()) {
+        const normalizedQuery = normalizeText(searchQuery, 160);
+        if (!normalizedQuery) {
           setError('Informe o produto que deseja pesquisar na busca livre.');
           return;
         }
 
         const storedAnalysis = await AdvisorService.analyzeFreeSearchProduct({
-          query: searchQuery.trim(),
-          baseCost: parseOptionalMoneyInput(searchBaseCost),
-          sellingPrice: parseOptionalMoneyInput(searchSellingPrice),
-          description: searchDescription.trim() || undefined,
-          suppliesText: searchSuppliesText.trim() || undefined,
+          query: normalizedQuery,
+          baseCost: parseOptionalNonNegativeFloat(searchBaseCost),
+          sellingPrice: parseOptionalNonNegativeFloat(searchSellingPrice),
+          description: normalizeMultilineText(searchDescription, 1000) || undefined,
+          suppliesText: normalizeMultilineText(searchSuppliesText, 1000) || undefined,
         });
 
         setLatestProductAnalysis(storedAnalysis);
         setLatestAnalysisSource('search');
       }
     } catch (requestError: any) {
-      setError(requestError?.message || 'Nao foi possivel analisar o produto agora.');
+      setError(requestError?.message || 'Não foi possível analisar o produto agora.');
     } finally {
       setLoadingProduct(false);
     }
@@ -303,13 +297,13 @@ export const Advisor: React.FC = () => {
 
   const handleOpenSavedAnalysis = () => {
     if (!selectedSavedProductId) {
-      setError('Selecione um produto com analise salva.');
+      setError('Selecione um produto com análise salva.');
       return;
     }
 
     const storedAnalysis = savedAnalysisLookup.get(selectedSavedProductId);
     if (!storedAnalysis) {
-      setError('A analise selecionada nao foi encontrada.');
+      setError('A análise selecionada não foi encontrada.');
       return;
     }
 
@@ -325,10 +319,10 @@ export const Advisor: React.FC = () => {
               MyBizPro AI
             </span>
             <h2 className="text-3xl md:text-4xl font-black mt-3 mb-3 tracking-tight">
-              Inteligencia comercial para vender melhor.
+              Inteligência comercial para vender melhor.
             </h2>
             <p className="text-slate-300 md:text-lg">
-              Gere insights do negocio, salve leituras por produto e consulte essas analises sempre que precisar.
+              Gere insights do negócio, salve leituras por produto e consulte essas análises sempre que precisar.
             </p>
           </div>
           <div className="absolute top-0 right-0 p-6 opacity-15 pointer-events-none">
@@ -348,11 +342,11 @@ export const Advisor: React.FC = () => {
               <div className="max-w-3xl">
                 <div className="inline-flex items-center gap-2 text-[11px] font-black uppercase tracking-[0.2em] text-indigo-500">
                   <ChartUpIcon className="w-4 h-4" />
-                  <span>Panorama do negocio</span>
+                  <span>Panorama do negócio</span>
                 </div>
                 <h3 className="text-2xl font-black text-slate-950 mt-2">Insight geral</h3>
                 <p className="text-slate-500 mt-2">
-                  A IA resume seu momento atual e sugere acoes praticas para melhorar operacao e margem.
+                  A IA resume seu momento atual e sugere ações práticas para melhorar operação e margem.
                 </p>
               </div>
 
@@ -379,7 +373,7 @@ export const Advisor: React.FC = () => {
                 <div className="grid gap-4 md:grid-cols-2">
                   <div className="bg-white border border-slate-100 rounded-2xl p-5">
                     <h4 className="text-sm font-black uppercase tracking-widest text-slate-400 mb-3">
-                      Recomendacoes
+                      Recomendações
                     </h4>
                     <ul className="space-y-3">
                       {overviewInsight.recommendations.map((item, index) => (
@@ -405,7 +399,7 @@ export const Advisor: React.FC = () => {
                         ))
                       ) : (
                         <li className="text-slate-400">
-                          Sem oportunidades adicionais retornadas nesta analise.
+                          Sem oportunidades adicionais retornadas nesta análise.
                         </li>
                       )}
                     </ul>
@@ -421,9 +415,9 @@ export const Advisor: React.FC = () => {
                 <BoxIcon className="w-4 h-4" />
                 <span>Leitura por produto</span>
               </div>
-              <h3 className="text-2xl font-black text-slate-950 mt-2">Analise de marketing</h3>
+              <h3 className="text-2xl font-black text-slate-950 mt-2">Análise de marketing</h3>
               <p className="text-slate-500 mt-2">
-                Gere uma nova analise com IA ou abra uma leitura salva de um produto ja analisado.
+                Gere uma nova análise com IA ou abra uma leitura salva de um produto já analisado.
               </p>
             </div>
 
@@ -432,10 +426,10 @@ export const Advisor: React.FC = () => {
                 <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                   <div className="max-w-3xl">
                     <h4 className="text-sm font-black uppercase tracking-widest text-slate-400">
-                      Nova analise
+                      Nova análise
                     </h4>
                     <p className="text-sm text-slate-500 mt-2">
-                      Analise um produto cadastrado ou use uma busca livre para estudar um produto que ainda nao esta no catalogo.
+                      Analise um produto cadastrado ou use uma busca livre para estudar um produto que ainda não está no catálogo.
                     </p>
                   </div>
 
@@ -469,7 +463,7 @@ export const Advisor: React.FC = () => {
                   <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
                     <div className="space-y-4">
                       <p className="text-sm text-slate-500">
-                        Se rodar novamente para o mesmo produto, a analise anterior sera substituida pela nova.
+                        Se rodar novamente para o mesmo produto, a análise anterior será substituída pela nova.
                       </p>
 
                       <div>
@@ -478,7 +472,7 @@ export const Advisor: React.FC = () => {
                         </label>
                         <select
                           value={selectedProductId}
-                          onChange={(event) => setSelectedProductId(parseProductId(event.target.value))}
+                          onChange={(event) => setSelectedProductId(parsePositiveInteger(event.target.value))}
                           className="w-full rounded-2xl border border-slate-200 bg-white p-3.5 text-slate-900 font-medium outline-none focus:ring-2 focus:ring-indigo-500"
                         >
                           {products.length === 0 ? (
@@ -514,15 +508,17 @@ export const Advisor: React.FC = () => {
                           type="text"
                           value={searchQuery}
                           onChange={(event) => setSearchQuery(event.target.value)}
+                          onBlur={(event) => setSearchQuery(normalizeText(event.target.value, 160))}
                           className="w-full rounded-2xl border border-slate-200 bg-white p-3.5 text-slate-900 font-medium outline-none focus:ring-2 focus:ring-indigo-500"
                           placeholder="Ex: squeezes personalizados para academia"
+                          maxLength={160}
                         />
                       </div>
 
                       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-2">
                         <div>
                           <label className="block text-[11px] font-black text-slate-400 uppercase tracking-widest ml-1 mb-2">
-                            Custo de producao (R$)
+                            Custo de produção (R$)
                           </label>
                           <input
                             type="number"
@@ -557,13 +553,17 @@ export const Advisor: React.FC = () => {
                     <div className="grid gap-4 xl:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)]">
                       <div>
                         <label className="block text-[11px] font-black text-slate-400 uppercase tracking-widest ml-1 mb-2">
-                          Descricao
+                          Descrição
                         </label>
                         <textarea
                           value={searchDescription}
                           onChange={(event) => setSearchDescription(event.target.value)}
+                          onBlur={(event) =>
+                            setSearchDescription(normalizeMultilineText(event.target.value, 1000))
+                          }
                           className="w-full min-h-32 rounded-2xl border border-slate-200 bg-white p-3.5 text-slate-900 font-medium outline-none resize-y focus:ring-2 focus:ring-indigo-500"
                           placeholder="Explique o produto, acabamento, proposta e contexto de uso."
+                          maxLength={1000}
                         />
                       </div>
 
@@ -572,12 +572,16 @@ export const Advisor: React.FC = () => {
                           <label className="block text-[11px] font-black text-slate-400 uppercase tracking-widest ml-1 mb-2">
                             Insumos principais
                           </label>
-                          <textarea
-                            value={searchSuppliesText}
-                            onChange={(event) => setSearchSuppliesText(event.target.value)}
-                            className="w-full min-h-32 rounded-2xl border border-slate-200 bg-white p-3.5 text-slate-900 font-medium outline-none resize-y focus:ring-2 focus:ring-indigo-500"
-                            placeholder="Separe por virgula ou linha. Ex: vidro 250ml, etiqueta adesiva, fita de cetim"
-                          />
+                        <textarea
+                          value={searchSuppliesText}
+                          onChange={(event) => setSearchSuppliesText(event.target.value)}
+                          onBlur={(event) =>
+                            setSearchSuppliesText(normalizeMultilineText(event.target.value, 1000))
+                          }
+                          className="w-full min-h-32 rounded-2xl border border-slate-200 bg-white p-3.5 text-slate-900 font-medium outline-none resize-y focus:ring-2 focus:ring-indigo-500"
+                          placeholder="Separe por vírgula ou linha. Ex: vidro 250ml, etiqueta adesiva, fita de cetim"
+                          maxLength={1000}
+                        />
                         </div>
 
                         <button
@@ -599,14 +603,14 @@ export const Advisor: React.FC = () => {
                   <div>
                     <div className="flex items-center gap-3">
                       <h4 className="text-sm font-black uppercase tracking-widest text-slate-400">
-                        Analises salvas
+                        Análises salvas
                       </h4>
                       <span className="text-xs font-bold text-slate-400">
                         {loadingSavedAnalyses ? 'Carregando...' : `${savedAnalyses.length} salvas`}
                       </span>
                     </div>
                     <p className="text-sm text-slate-500 mt-2">
-                      Selecione um produto que ja possui analise para abrir a leitura em destaque.
+                      Selecione um produto que já possui análise para abrir a leitura em destaque.
                     </p>
                   </div>
                 </div>
@@ -614,16 +618,16 @@ export const Advisor: React.FC = () => {
                 <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
                   <div>
                     <label className="block text-[11px] font-black text-slate-400 uppercase tracking-widest ml-1 mb-2">
-                      Produto com analise
+                      Produto com análise
                     </label>
                     <select
                       value={selectedSavedProductId}
-                      onChange={(event) => setSelectedSavedProductId(parseProductId(event.target.value))}
+                      onChange={(event) => setSelectedSavedProductId(parsePositiveInteger(event.target.value))}
                       className="w-full rounded-2xl border border-slate-200 bg-white p-3.5 text-slate-900 font-medium outline-none focus:ring-2 focus:ring-indigo-500"
                       disabled={savedAnalyses.length === 0}
                     >
                       {savedAnalyses.length === 0 ? (
-                        <option value="0">Nenhuma analise salva ainda</option>
+                        <option value="0">Nenhuma análise salva ainda</option>
                       ) : (
                         savedAnalyses.map((item) => (
                           <option key={item.productId} value={item.productId}>
@@ -640,7 +644,7 @@ export const Advisor: React.FC = () => {
                     className="inline-flex items-center justify-center gap-2 bg-white border border-slate-200 text-slate-900 px-5 py-3 rounded-2xl font-bold shadow-sm hover:border-indigo-300 hover:text-indigo-600 transition-all active:scale-95 disabled:opacity-60 lg:min-w-[220px]"
                   >
                     <ArrowRightIcon className="w-4 h-4" />
-                    <span>Ver analise salva</span>
+                    <span>Ver análise salva</span>
                   </button>
                 </div>
               </div>
@@ -648,7 +652,7 @@ export const Advisor: React.FC = () => {
 
             {analysisMode === 'catalog' && products.length === 0 && (
               <p className="text-sm text-slate-400">
-                Cadastre pelo menos um produto para usar esta analise.
+                Cadastre pelo menos um produto para usar esta análise.
               </p>
             )}
 
@@ -658,12 +662,12 @@ export const Advisor: React.FC = () => {
                   <div>
                     <div className="inline-flex items-center gap-2 text-[11px] font-black uppercase tracking-[0.2em] text-emerald-600">
                       <SparklesIcon className="w-4 h-4" />
-                      <span>Ultima analise gerada</span>
+                      <span>Última análise gerada</span>
                     </div>
                     <p className="text-sm text-slate-500 mt-2">
                       {latestAnalysisSource === 'catalog'
-                        ? 'Esta leitura ja foi salva e pode ser reaberta depois em analises salvas.'
-                        : 'Esta leitura veio de busca livre e nao foi salva automaticamente.'}
+                        ? 'Esta leitura já foi salva e pode ser reaberta depois em análises salvas.'
+                        : 'Esta leitura veio de busca livre e não foi salva automaticamente.'}
                     </p>
                   </div>
                   <button
@@ -695,7 +699,7 @@ export const Advisor: React.FC = () => {
               <div className="flex items-center justify-between gap-4 px-6 py-5 border-b border-slate-100">
                 <div>
                   <div className="text-[11px] font-black uppercase tracking-[0.2em] text-indigo-500">
-                    Analise salva
+                    Análise salva
                   </div>
                   <h3 className="text-2xl font-black text-slate-950 mt-2">
                     {modalAnalysis.productName}
@@ -720,3 +724,4 @@ export const Advisor: React.FC = () => {
     </>
   );
 };
+

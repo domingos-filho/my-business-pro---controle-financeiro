@@ -12,6 +12,13 @@ import {
   SubscriptionStatus,
 } from '../services/AdminAccessService';
 import { CheckCircleIcon, ClockIcon, RefreshIcon, ShieldIcon, UsersIcon } from './AppIcons';
+import {
+  isValidEmail,
+  normalizeEmail,
+  normalizeText,
+  parseNonNegativeFloat,
+  parsePositiveInteger,
+} from '../utils/input';
 
 const STATUS_STYLES: Record<string, string> = {
   ACTIVE: 'bg-emerald-100 text-emerald-700',
@@ -88,7 +95,7 @@ export const AccessControl: React.FC = () => {
       const [settingsResponse, userResponse, logResponse, inviteResponse, planResponse, subscriptionResponse] = await Promise.all([
         AdminAccessService.getSettings(),
         AdminAccessService.listUsers({
-          search: search.trim() || undefined,
+          search: normalizeText(search, 120) || undefined,
           status: statusFilter || undefined,
         }),
         AdminAccessService.listLogs(),
@@ -120,7 +127,7 @@ export const AccessControl: React.FC = () => {
       setSubscriptionUserId((current) => current || (userResponse.items[0] ? String(userResponse.items[0].id) : ''));
       setSubscriptionPlanId((current) => current || (planResponse[0] ? String(planResponse[0].id) : ''));
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : 'Nao foi possivel carregar o controle de acesso.');
+      setError(requestError instanceof Error ? requestError.message : 'Não foi possível carregar o controle de acesso.');
     } finally {
       setLoading(false);
     }
@@ -144,7 +151,7 @@ export const AccessControl: React.FC = () => {
   const handleUpdateStatus = async (user: AccessUser, accessStatus: AccessStatus) => {
     const reason =
       accessStatus === 'SUSPENDED' || accessStatus === 'CANCELLED'
-        ? window.prompt('Informe o motivo desta alteracao (opcional):', '') || undefined
+        ? window.prompt('Informe o motivo desta alteração (opcional):', '') || undefined
         : undefined;
 
     try {
@@ -154,7 +161,7 @@ export const AccessControl: React.FC = () => {
       });
       await load();
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : 'Nao foi possivel alterar o acesso da conta.');
+      setError(requestError instanceof Error ? requestError.message : 'Não foi possível alterar o acesso da conta.');
     }
   };
 
@@ -167,17 +174,22 @@ export const AccessControl: React.FC = () => {
       });
       await load();
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : 'Nao foi possivel iniciar o trial da conta.');
+      setError(requestError instanceof Error ? requestError.message : 'Não foi possível iniciar o trial da conta.');
     }
   };
 
   const handleCreateInvite = async (event: React.FormEvent) => {
     event.preventDefault();
     setError('');
+    const normalizedInviteEmail = normalizeEmail(inviteEmail);
+    if (!isValidEmail(normalizedInviteEmail)) {
+      setError('Informe um e-mail válido para o convite.');
+      return;
+    }
 
     try {
       const invite = await AdminAccessService.createInvite({
-        email: inviteEmail.trim(),
+        email: normalizedInviteEmail,
         accessStatus: inviteAccessStatus,
         trialDays: inviteAccessStatus === 'TRIAL' ? trialDays : undefined,
         expiresInDays: inviteExpiresInDays,
@@ -186,7 +198,7 @@ export const AccessControl: React.FC = () => {
       setInviteEmail('');
       await load();
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : 'Nao foi possivel criar o convite.');
+      setError(requestError instanceof Error ? requestError.message : 'Não foi possível criar o convite.');
     }
   };
 
@@ -195,24 +207,34 @@ export const AccessControl: React.FC = () => {
       await AdminAccessService.revokeInvite(invite.id);
       await load();
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : 'Nao foi possivel revogar o convite.');
+      setError(requestError instanceof Error ? requestError.message : 'Não foi possível revogar o convite.');
     }
   };
 
   const handleCreatePlan = async (event: React.FormEvent) => {
     event.preventDefault();
     setError('');
+    const normalizedPlanName = normalizeText(planName, 80);
+    if (normalizedPlanName.length < 2) {
+      setError('Informe um nome de plano com pelo menos 2 caracteres.');
+      return;
+    }
 
-    const normalizedPrice = Number(planPrice.replace(',', '.'));
+    const normalizedPlanCode = normalizeText(planCode, 60)
+      .toLowerCase()
+      .replace(/\s+/g, '-')
+      .replace(/[^a-z0-9_-]/g, '');
+
+    const normalizedPrice = parseNonNegativeFloat(planPrice, -1);
     if (!Number.isFinite(normalizedPrice) || normalizedPrice < 0) {
-      setError('Informe um valor valido para o plano.');
+      setError('Informe um valor válido para o plano.');
       return;
     }
 
     try {
       const plan = await AdminAccessService.createPlan({
-        code: planCode.trim() || undefined,
-        name: planName.trim(),
+        code: normalizedPlanCode || undefined,
+        name: normalizedPlanName,
         priceCents: Math.round(normalizedPrice * 100),
         currency: 'BRL',
         billingInterval: planInterval,
@@ -223,7 +245,7 @@ export const AccessControl: React.FC = () => {
       setSubscriptionPlanId(String(plan.id));
       await load();
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : 'Nao foi possivel criar o plano.');
+      setError(requestError instanceof Error ? requestError.message : 'Não foi possível criar o plano.');
     }
   };
 
@@ -231,11 +253,11 @@ export const AccessControl: React.FC = () => {
     event.preventDefault();
     setError('');
 
-    const userId = Number(subscriptionUserId);
-    const planId = Number(subscriptionPlanId);
+    const userId = parsePositiveInteger(subscriptionUserId);
+    const planId = parsePositiveInteger(subscriptionPlanId);
 
-    if (!Number.isInteger(userId) || !Number.isInteger(planId)) {
-      setError('Selecione usuario e plano para criar a assinatura.');
+    if (!userId || !planId) {
+      setError('Selecione usuário e plano para criar a assinatura.');
       return;
     }
 
@@ -247,7 +269,7 @@ export const AccessControl: React.FC = () => {
       });
       await load();
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : 'Nao foi possivel criar a assinatura.');
+      setError(requestError instanceof Error ? requestError.message : 'Não foi possível criar a assinatura.');
     }
   };
 
@@ -259,7 +281,7 @@ export const AccessControl: React.FC = () => {
       });
       await load();
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : 'Nao foi possivel alterar a assinatura.');
+      setError(requestError instanceof Error ? requestError.message : 'Não foi possível alterar a assinatura.');
     }
   };
 
@@ -276,7 +298,7 @@ export const AccessControl: React.FC = () => {
         <div>
           <h2 className="text-3xl font-black text-slate-900 tracking-tight">Controle de Acesso</h2>
           <p className="text-sm font-medium text-slate-500">
-            Aprove, suspenda e acompanhe o status comercial das contas que usam a aplicacao.
+            Aprove, suspenda e acompanhe o status comercial das contas que usam a aplicação.
           </p>
           {settings && (
             <p className="mt-2 text-xs font-bold uppercase tracking-wider text-slate-400">
@@ -331,8 +353,10 @@ export const AccessControl: React.FC = () => {
               type="text"
               value={search}
               onChange={(event) => setSearch(event.target.value)}
+              onBlur={(event) => setSearch(normalizeText(event.target.value, 120))}
               placeholder="Nome ou e-mail"
               className="w-full rounded-2xl border border-slate-200 bg-slate-50 p-3.5 text-slate-900 font-medium outline-none focus:ring-2 focus:ring-indigo-500"
+              maxLength={120}
             />
           </div>
 
@@ -361,13 +385,13 @@ export const AccessControl: React.FC = () => {
             </label>
             <select
               value={trialDays}
-              onChange={(event) => setTrialDays(Number(event.target.value))}
+              onChange={(event) => setTrialDays(parsePositiveInteger(event.target.value, trialDays))}
               className="w-full rounded-2xl border border-slate-200 bg-slate-50 p-3.5 text-slate-900 font-medium outline-none focus:ring-2 focus:ring-indigo-500"
             >
               {(settings?.trialDayOptions || [7, 14, 30]).map((option) => (
                 <option key={option} value={option}>
                   {option} dias
-                  {settings?.defaultTrialDays === option ? ' (padrao)' : ''}
+                  {settings?.defaultTrialDays === option ? ' (padrão)' : ''}
                 </option>
               ))}
             </select>
@@ -418,7 +442,7 @@ export const AccessControl: React.FC = () => {
                       <p className="mt-1 text-sm font-medium text-slate-700">{formatDate(user.createdAt)}</p>
                     </div>
                     <div>
-                      <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Ultimo login</p>
+                      <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Último login</p>
                       <p className="mt-1 text-sm font-medium text-slate-700">{formatDate(user.lastLoginAt)}</p>
                     </div>
                     <div>
@@ -426,7 +450,7 @@ export const AccessControl: React.FC = () => {
                       <p className="mt-1 text-sm font-medium text-slate-700">
                         {user.accessStatus === 'TRIAL'
                           ? `${formatTrialStatus(user.trialEndsAt)} - ${formatDate(user.trialEndsAt)}`
-                          : 'Nao aplicado'}
+                          : 'Não aplicado'}
                       </p>
                     </div>
                   </div>
@@ -500,7 +524,7 @@ export const AccessControl: React.FC = () => {
             <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Assinaturas</p>
             <h3 className="mt-2 text-xl font-black text-slate-950">Controle comercial recorrente</h3>
             <p className="mt-1 text-sm font-medium text-slate-500">
-              Use esta base manual ate conectar um gateway de pagamento. Status inadimplente, cancelado ou expirado bloqueia o acesso.
+              Use esta base manual até conectar um gateway de pagamento. Status inadimplente, cancelado ou expirado bloqueia o acesso.
             </p>
           </div>
           <p className="text-xs font-bold uppercase tracking-wider text-slate-400">
@@ -522,22 +546,33 @@ export const AccessControl: React.FC = () => {
                   type="text"
                   value={planName}
                   onChange={(event) => setPlanName(event.target.value)}
+                  onBlur={(event) => setPlanName(normalizeText(event.target.value, 80))}
                   placeholder="Profissional"
                   className="w-full rounded-2xl border border-slate-200 bg-white p-3.5 text-slate-900 font-medium outline-none focus:ring-2 focus:ring-indigo-500"
+                  maxLength={80}
                   required
                 />
               </div>
 
               <div>
                 <label className="ml-1 mb-2 block text-[11px] font-black uppercase tracking-widest text-slate-400">
-                  Codigo
+                  Código
                 </label>
                 <input
                   type="text"
                   value={planCode}
                   onChange={(event) => setPlanCode(event.target.value)}
+                  onBlur={(event) =>
+                    setPlanCode(
+                      normalizeText(event.target.value, 60)
+                        .toLowerCase()
+                        .replace(/\s+/g, '-')
+                        .replace(/[^a-z0-9_-]/g, ''),
+                    )
+                  }
                   placeholder="professional"
                   className="w-full rounded-2xl border border-slate-200 bg-white p-3.5 text-slate-900 font-medium outline-none focus:ring-2 focus:ring-indigo-500"
+                  maxLength={60}
                 />
               </div>
 
@@ -550,6 +585,10 @@ export const AccessControl: React.FC = () => {
                   inputMode="decimal"
                   value={planPrice}
                   onChange={(event) => setPlanPrice(event.target.value)}
+                  onBlur={(event) => {
+                    const parsed = parseNonNegativeFloat(event.target.value, -1);
+                    setPlanPrice(parsed >= 0 ? parsed.toFixed(2) : '');
+                  }}
                   placeholder="49,90"
                   className="w-full rounded-2xl border border-slate-200 bg-white p-3.5 text-slate-900 font-medium outline-none focus:ring-2 focus:ring-indigo-500"
                   required
@@ -567,7 +606,7 @@ export const AccessControl: React.FC = () => {
                 >
                   <option value="MONTH">Mensal</option>
                   <option value="YEAR">Anual</option>
-                  <option value="LIFETIME">Vitalicio</option>
+                  <option value="LIFETIME">Vitalício</option>
                 </select>
               </div>
             </div>
@@ -607,7 +646,9 @@ export const AccessControl: React.FC = () => {
                 </label>
                 <select
                   value={subscriptionUserId}
-                  onChange={(event) => setSubscriptionUserId(event.target.value)}
+                  onChange={(event) =>
+                    setSubscriptionUserId(String(parsePositiveInteger(event.target.value)))
+                  }
                   className="w-full rounded-2xl border border-slate-200 bg-white p-3.5 text-slate-900 font-medium outline-none focus:ring-2 focus:ring-indigo-500"
                   required
                 >
@@ -625,7 +666,9 @@ export const AccessControl: React.FC = () => {
                 </label>
                 <select
                   value={subscriptionPlanId}
-                  onChange={(event) => setSubscriptionPlanId(event.target.value)}
+                  onChange={(event) =>
+                    setSubscriptionPlanId(String(parsePositiveInteger(event.target.value)))
+                  }
                   className="w-full rounded-2xl border border-slate-200 bg-white p-3.5 text-slate-900 font-medium outline-none focus:ring-2 focus:ring-indigo-500"
                   required
                 >
@@ -654,17 +697,19 @@ export const AccessControl: React.FC = () => {
 
               <div>
                 <label className="ml-1 mb-2 block text-[11px] font-black uppercase tracking-widest text-slate-400">
-                  Periodo
+                  Período
                 </label>
                 <select
                   value={subscriptionPeriodDays}
-                  onChange={(event) => setSubscriptionPeriodDays(Number(event.target.value))}
+                  onChange={(event) =>
+                    setSubscriptionPeriodDays(parsePositiveInteger(event.target.value, subscriptionPeriodDays))
+                  }
                   className="w-full rounded-2xl border border-slate-200 bg-white p-3.5 text-slate-900 font-medium outline-none focus:ring-2 focus:ring-indigo-500"
                 >
                   {(settings?.subscriptionPeriodOptions || [30, 90, 365]).map((option) => (
                     <option key={option} value={option}>
                       {option} dias
-                      {settings?.defaultSubscriptionPeriodDays === option ? ' (padrao)' : ''}
+                      {settings?.defaultSubscriptionPeriodDays === option ? ' (padrão)' : ''}
                     </option>
                   ))}
                 </select>
@@ -697,11 +742,11 @@ export const AccessControl: React.FC = () => {
                   </div>
                   <p className="mt-2 text-sm font-medium text-slate-500">
                     {subscription.planName || 'Plano'} - {formatMoney(subscription.planPriceCents, subscription.planCurrency || 'BRL')}
-                    {' | '}Periodo ate{' '}
+                    {' | '}Período até{' '}
                     {subscription.currentPeriodEnd
                       ? formatDate(subscription.currentPeriodEnd)
                       : subscription.planBillingInterval === 'LIFETIME'
-                        ? 'Vitalicio'
+                        ? 'Vitalício'
                         : 'Sem data'}
                   </p>
                   <p className="mt-1 text-xs font-bold text-slate-400 break-all">
@@ -764,8 +809,10 @@ export const AccessControl: React.FC = () => {
               type="email"
               value={inviteEmail}
               onChange={(event) => setInviteEmail(event.target.value)}
+              onBlur={(event) => setInviteEmail(normalizeEmail(event.target.value))}
               placeholder="cliente@email.com"
               className="w-full rounded-2xl border border-slate-200 bg-slate-50 p-3.5 text-slate-900 font-medium outline-none focus:ring-2 focus:ring-indigo-500"
+              maxLength={160}
               required
             />
           </div>
@@ -791,14 +838,14 @@ export const AccessControl: React.FC = () => {
             </label>
             <select
               value={trialDays}
-              onChange={(event) => setTrialDays(Number(event.target.value))}
+              onChange={(event) => setTrialDays(parsePositiveInteger(event.target.value, trialDays))}
               disabled={inviteAccessStatus !== 'TRIAL'}
               className="w-full rounded-2xl border border-slate-200 bg-slate-50 p-3.5 text-slate-900 font-medium outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50"
             >
               {(settings?.trialDayOptions || [7, 14, 30]).map((option) => (
                 <option key={option} value={option}>
                   {option} dias
-                  {settings?.defaultTrialDays === option ? ' (padrao)' : ''}
+                  {settings?.defaultTrialDays === option ? ' (padrão)' : ''}
                 </option>
               ))}
             </select>
@@ -810,13 +857,15 @@ export const AccessControl: React.FC = () => {
             </label>
             <select
               value={inviteExpiresInDays}
-              onChange={(event) => setInviteExpiresInDays(Number(event.target.value))}
+              onChange={(event) =>
+                setInviteExpiresInDays(parsePositiveInteger(event.target.value, inviteExpiresInDays))
+              }
               className="w-full rounded-2xl border border-slate-200 bg-slate-50 p-3.5 text-slate-900 font-medium outline-none focus:ring-2 focus:ring-indigo-500"
             >
               {[3, 7, 14, 30].map((option) => (
                 <option key={option} value={option}>
                   {option} dias
-                  {settings?.defaultInviteExpiresDays === option ? ' (padrao)' : ''}
+                  {settings?.defaultInviteExpiresDays === option ? ' (padrão)' : ''}
                 </option>
               ))}
             </select>
@@ -897,7 +946,7 @@ export const AccessControl: React.FC = () => {
       <section className="rounded-[2rem] border border-slate-100 bg-white p-6 shadow-sm space-y-4">
         <div>
           <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Auditoria</p>
-          <h3 className="mt-2 text-xl font-black text-slate-950">Ultimas alteracoes de acesso</h3>
+          <h3 className="mt-2 text-xl font-black text-slate-950">Últimas alterações de acesso</h3>
         </div>
 
         <div className="space-y-3">
@@ -930,3 +979,4 @@ export const AccessControl: React.FC = () => {
     </div>
   );
 };
+

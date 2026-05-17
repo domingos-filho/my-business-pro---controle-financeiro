@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { AuthService, InvitePreview, User } from '../services/AuthService';
 import { ApiError } from '../services/apiClient';
 import { BrandLogo } from './BrandLogo';
+import { isValidEmail, normalizeEmail, normalizeText } from '../utils/input';
 
 interface AuthProps {
   onLogin: (user: User) => void;
@@ -41,7 +42,7 @@ export const Auth: React.FC<AuthProps> = ({ onLogin }) => {
       })
       .catch((error) => {
         if (!active) return;
-        setErrorMessage(error instanceof Error ? error.message : 'Convite invalido ou expirado.');
+        setErrorMessage(error instanceof Error ? error.message : 'Convite inválido ou expirado.');
       })
       .finally(() => {
         if (active) setInviteLoading(false);
@@ -60,12 +61,17 @@ export const Auth: React.FC<AuthProps> = ({ onLogin }) => {
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!email || !password) return;
+    const normalizedEmail = normalizeEmail(email);
+    const normalizedPassword = password.trim();
+    if (!normalizedEmail || !normalizedPassword || !isValidEmail(normalizedEmail)) {
+      setErrorMessage('Informe e-mail e senha válidos.');
+      return;
+    }
     setErrorMessage('');
     setAccessNotice(null);
     setLoading(true);
     try {
-      const user = await AuthService.loginWithEmail(email, password);
+      const user = await AuthService.loginWithEmail(normalizedEmail, normalizedPassword);
       onLogin(user);
     } catch (error) {
       if (error instanceof ApiError && error.status === 403) {
@@ -83,12 +89,23 @@ export const Auth: React.FC<AuthProps> = ({ onLogin }) => {
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name || !email || !password) return;
+    const normalizedName = normalizeText(name, 100);
+    const normalizedEmail = normalizeEmail(email);
+    const normalizedPassword = password.trim();
+    if (!normalizedName || !normalizedEmail || !normalizedPassword || !isValidEmail(normalizedEmail)) {
+      setErrorMessage('Preencha nome, e-mail válido e senha.');
+      return;
+    }
     setErrorMessage('');
     setAccessNotice(null);
     setLoading(true);
     try {
-      const user = await AuthService.register(name, email, password, inviteToken || undefined);
+      const user = await AuthService.register(
+        normalizedName,
+        normalizedEmail,
+        normalizedPassword,
+        inviteToken || undefined,
+      );
       onLogin(user);
     } catch (error) {
       if (
@@ -99,7 +116,7 @@ export const Auth: React.FC<AuthProps> = ({ onLogin }) => {
       ) {
         setAccessNotice({
           title: 'Conta criada com sucesso',
-          message: 'Seu cadastro foi concluido e agora aguarda aprovacao. Assim que sua conta for liberada, voce podera entrar normalmente.',
+          message: 'Seu cadastro foi concluído e agora aguarda aprovação. Assim que sua conta for liberada, você poderá entrar normalmente.',
         });
       } else if (error instanceof ApiError && error.status === 403) {
         setAccessNotice({
@@ -150,7 +167,7 @@ export const Auth: React.FC<AuthProps> = ({ onLogin }) => {
             className="mb-10"
           />
           <p className="text-slate-400 font-medium leading-relaxed mb-14">
-            Gestao inteligente para artesaos e criadores de produtos personalizados.
+            Gestão inteligente para artesãos e criadores de produtos personalizados.
           </p>
 
           <div className="space-y-4">
@@ -158,13 +175,13 @@ export const Auth: React.FC<AuthProps> = ({ onLogin }) => {
               onClick={() => goToStep('signup')}
               className="w-full bg-white text-slate-950 py-[18px] rounded-2xl font-black text-lg shadow-xl active:scale-95 transition-all"
             >
-              Criar Conta Gratis
+              Criar conta grátis
             </button>
             <button
               onClick={() => goToStep('login')}
               className="w-full bg-white/5 text-white border border-white/10 py-[18px] rounded-2xl font-black text-lg hover:bg-white/10 transition-all active:scale-95 backdrop-blur-sm"
             >
-              Fazer Login
+              Fazer login
             </button>
           </div>
 
@@ -184,7 +201,7 @@ export const Auth: React.FC<AuthProps> = ({ onLogin }) => {
             onClick={() => goToStep('welcome')}
             className="inline-flex items-center gap-2 text-slate-400 text-xs font-black uppercase tracking-widest mb-6 hover:text-indigo-600 transition-colors group"
           >
-            <span className="group-hover:-translate-x-1 transition-transform">&lt;-</span> Inicio
+            <span className="group-hover:-translate-x-1 transition-transform">&lt;-</span> Início
           </button>
           <h2 className="text-4xl font-black text-slate-900 tracking-tight">
             {step === 'login' ? 'Bem-vindo!' : 'Nova Conta'}
@@ -222,8 +239,11 @@ export const Auth: React.FC<AuthProps> = ({ onLogin }) => {
                     type="text"
                     value={name}
                     onChange={(e) => setName(e.target.value)}
+                    onBlur={(e) => setName(normalizeText(e.target.value, 100))}
                     className={inputClasses}
-                    placeholder="Nome do seu negocio"
+                    placeholder="Nome do seu negócio"
+                    autoComplete="name"
+                    maxLength={100}
                     required
                   />
                 </div>
@@ -245,8 +265,11 @@ export const Auth: React.FC<AuthProps> = ({ onLogin }) => {
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
+                  onBlur={(e) => setEmail(normalizeEmail(e.target.value))}
                   className={inputClasses}
                   placeholder="exemplo@email.com"
+                  autoComplete="email"
+                  maxLength={160}
                   required
                 />
               </div>
@@ -260,6 +283,9 @@ export const Auth: React.FC<AuthProps> = ({ onLogin }) => {
                     onChange={(e) => setPassword(e.target.value)}
                     className={passwordInputClasses}
                     placeholder="**********"
+                    autoComplete={step === 'login' ? 'current-password' : 'new-password'}
+                    minLength={10}
+                    maxLength={120}
                     required
                   />
                   <button
@@ -273,7 +299,7 @@ export const Auth: React.FC<AuthProps> = ({ onLogin }) => {
                 </div>
                 {step === 'signup' && (
                   <p className="mt-2 ml-1 text-[11px] font-medium text-slate-400">
-                    Use no minimo 10 caracteres com letra maiuscula, minuscula e numero.
+                    Use no mínimo 10 caracteres com letra maiúscula, minúscula e número.
                   </p>
                 )}
               </div>
@@ -299,7 +325,7 @@ export const Auth: React.FC<AuthProps> = ({ onLogin }) => {
                 ) : step === 'login' ? (
                   'Entrar'
                 ) : (
-                  'Comecar Agora'
+                  'Começar agora'
                 )}
               </button>
             </form>
@@ -364,7 +390,7 @@ export const Auth: React.FC<AuthProps> = ({ onLogin }) => {
                 onClick={() => goToStep(step === 'login' ? 'signup' : 'login')}
                 className="text-sm font-bold text-slate-400 hover:text-indigo-600 transition-colors"
               >
-                {step === 'login' ? 'Nao tem conta?' : 'Ja possui conta?'}{' '}
+                {step === 'login' ? 'Não tem conta?' : 'Já possui conta?'}{' '}
                 <span className="text-indigo-600 font-black">
                   {step === 'login' ? 'Cadastre-se' : 'Entrar'}
                 </span>
@@ -374,9 +400,10 @@ export const Auth: React.FC<AuthProps> = ({ onLogin }) => {
         </div>
 
         <p className="text-center text-slate-400 text-[10px] font-bold uppercase tracking-widest">
-          Sua conta e sincronizada automaticamente com a nuvem.
+          Sua conta é sincronizada automaticamente com a nuvem.
         </p>
       </div>
     </div>
   );
 };
+
