@@ -1,12 +1,13 @@
 import express from 'express';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
+import adminRouter from './routes/admin.js';
 import aiRouter from './routes/ai.js';
 import authRouter from './routes/auth.js';
 import ordersRouter from './routes/orders.js';
 import resourcesRouter from './routes/resources.js';
 import { initializeDatabase, pool } from './db.js';
-import { requireAuth } from './middleware/auth.js';
+import { requireAdmin, requireAuth, requireCommercialAccess } from './middleware/auth.js';
 
 const app = express();
 const PORT = Number(process.env.PORT || 4000);
@@ -72,9 +73,10 @@ app.get('/api/health', async (_req, res) => {
 });
 
 app.use('/api/auth', authRouter);
-app.use('/api/ai', requireAuth, aiRouter);
-app.use('/api/orders', requireAuth, ordersRouter);
-app.use('/api', requireAuth, resourcesRouter);
+app.use('/api/admin', requireAuth, requireCommercialAccess, requireAdmin, adminRouter);
+app.use('/api/ai', requireAuth, requireCommercialAccess, aiRouter);
+app.use('/api/orders', requireAuth, requireCommercialAccess, ordersRouter);
+app.use('/api', requireAuth, requireCommercialAccess, resourcesRouter);
 
 app.use((err, _req, res, _next) => {
   const statusCode = err.statusCode || 500;

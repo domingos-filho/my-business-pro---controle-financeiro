@@ -90,7 +90,12 @@ const createUsersTableSql = `
 const createUserIndexesSql = [
   'CREATE UNIQUE INDEX IF NOT EXISTS users_email_unique_idx ON users (lower(email));',
   'CREATE INDEX IF NOT EXISTS users_is_active_idx ON users (is_active);',
+  'CREATE INDEX IF NOT EXISTS users_is_admin_idx ON users (is_admin);',
   'CREATE INDEX IF NOT EXISTS users_locked_until_idx ON users (locked_until);',
+  'CREATE INDEX IF NOT EXISTS users_access_status_idx ON users (access_status);',
+  'CREATE INDEX IF NOT EXISTS users_access_mode_idx ON users (access_mode);',
+  'CREATE INDEX IF NOT EXISTS users_trial_ends_at_idx ON users (trial_ends_at);',
+  'CREATE INDEX IF NOT EXISTS users_access_expires_at_idx ON users (access_expires_at);',
 ];
 
 const ensureUserSecurityColumnsSql = [
@@ -98,6 +103,17 @@ const ensureUserSecurityColumnsSql = [
   'ALTER TABLE users ADD COLUMN IF NOT EXISTS password_updated_at BIGINT NULL;',
   'ALTER TABLE users ADD COLUMN IF NOT EXISTS failed_login_attempts INTEGER NOT NULL DEFAULT 0;',
   'ALTER TABLE users ADD COLUMN IF NOT EXISTS locked_until BIGINT NULL;',
+  'ALTER TABLE users ADD COLUMN IF NOT EXISTS is_admin BOOLEAN NOT NULL DEFAULT FALSE;',
+  "ALTER TABLE users ADD COLUMN IF NOT EXISTS access_status TEXT NOT NULL DEFAULT 'ACTIVE';",
+  "ALTER TABLE users ADD COLUMN IF NOT EXISTS access_mode TEXT NOT NULL DEFAULT 'OPEN_REGISTRATION';",
+  'ALTER TABLE users ADD COLUMN IF NOT EXISTS trial_ends_at BIGINT NULL;',
+  'ALTER TABLE users ADD COLUMN IF NOT EXISTS access_expires_at BIGINT NULL;',
+  'ALTER TABLE users ADD COLUMN IF NOT EXISTS approved_at BIGINT NULL;',
+  'ALTER TABLE users ADD COLUMN IF NOT EXISTS approved_by INTEGER NULL;',
+  'ALTER TABLE users ADD COLUMN IF NOT EXISTS suspended_at BIGINT NULL;',
+  'ALTER TABLE users ADD COLUMN IF NOT EXISTS suspension_reason TEXT NULL;',
+  'ALTER TABLE users ADD COLUMN IF NOT EXISTS cancelled_at BIGINT NULL;',
+  'ALTER TABLE users ADD COLUMN IF NOT EXISTS last_access_check_at BIGINT NULL;',
 ];
 
 const createSessionsTableSql = `
@@ -137,6 +153,31 @@ const createPasswordResetTokenIndexesSql = [
   'CREATE INDEX IF NOT EXISTS password_reset_tokens_user_id_idx ON password_reset_tokens (user_id);',
   'CREATE INDEX IF NOT EXISTS password_reset_tokens_expires_at_idx ON password_reset_tokens (expires_at);',
 ];
+
+const createUserAccessLogsTableSql = `
+  CREATE TABLE IF NOT EXISTS user_access_logs (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    actor_user_id INTEGER NULL REFERENCES users(id) ON DELETE SET NULL,
+    event TEXT NOT NULL,
+    previous_status TEXT NULL,
+    new_status TEXT NULL,
+    reason TEXT NULL,
+    metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+    created_at BIGINT NOT NULL
+  );
+`;
+
+const createUserAccessLogsIndexesSql = [
+  'CREATE INDEX IF NOT EXISTS user_access_logs_user_id_idx ON user_access_logs (user_id);',
+  'CREATE INDEX IF NOT EXISTS user_access_logs_actor_user_id_idx ON user_access_logs (actor_user_id);',
+  'CREATE INDEX IF NOT EXISTS user_access_logs_created_at_idx ON user_access_logs (created_at);',
+];
+
+const adminEmails = String(process.env.ADMIN_EMAILS || '')
+  .split(',')
+  .map((email) => email.trim().toLowerCase())
+  .filter(Boolean);
 
 const createAiProductAnalysesTableSql = `
   CREATE TABLE IF NOT EXISTS ai_product_analyses (
@@ -239,6 +280,23 @@ const seedSystemCategories = async (client) => {
   }
 };
 
+const ensureAdminEmails = async (client) => {
+  if (!adminEmails.length) {
+    return;
+  }
+
+  const now = Date.now();
+  await client.query(
+    `UPDATE users
+     SET is_admin = TRUE,
+         access_status = 'ACTIVE',
+         approved_at = COALESCE(approved_at, $2),
+         updated_at = $2
+     WHERE lower(email) = ANY($1::text[])`,
+    [adminEmails, now]
+  );
+};
+
 const ensureSchema = async () => {
   const client = await pool.connect();
   try {
@@ -257,6 +315,11 @@ const ensureSchema = async () => {
 
     await client.query(createPasswordResetTokensTableSql);
     for (const stmt of createPasswordResetTokenIndexesSql) {
+      await client.query(stmt);
+    }
+
+    await client.query(createUserAccessLogsTableSql);
+    for (const stmt of createUserAccessLogsIndexesSql) {
       await client.query(stmt);
     }
 
@@ -283,6 +346,7 @@ const ensureSchema = async () => {
     for (const stmt of createCategorySystemIndexesSql) {
       await client.query(stmt);
     }
+    await ensureAdminEmails(client);
     await seedSystemCategories(client);
   } finally {
     client.release();

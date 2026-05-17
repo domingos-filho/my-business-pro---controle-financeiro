@@ -1,10 +1,19 @@
-class ApiError extends Error {
+export class ApiError extends Error {
   status: number;
+  code?: string;
+  payload?: Record<string, unknown> | null;
 
-  constructor(message: string, status: number) {
+  constructor(
+    message: string,
+    status: number,
+    code?: string,
+    payload?: Record<string, unknown> | null,
+  ) {
     super(message);
     this.name = 'ApiError';
     this.status = status;
+    this.code = code;
+    this.payload = payload || null;
   }
 }
 
@@ -40,21 +49,33 @@ const tryRefreshSessionInternal = async (): Promise<boolean> => {
   return refreshPromise;
 };
 
-const parseErrorMessage = async (response: Response): Promise<string> => {
+const parseErrorPayload = async (
+  response: Response,
+): Promise<{ message: string; code?: string; payload?: Record<string, unknown> | null }> => {
   const contentType = response.headers.get('content-type') || '';
 
   if (contentType.includes('application/json')) {
     const payload = await response.json().catch(() => null);
     if (payload?.error && typeof payload.error === 'string') {
-      return payload.error;
+      return {
+        message: payload.error,
+        code: typeof payload.code === 'string' ? payload.code : undefined,
+        payload,
+      };
     }
     if (payload?.error?.message && typeof payload.error.message === 'string') {
-      return payload.error.message;
+      return {
+        message: payload.error.message,
+        code: typeof payload.code === 'string' ? payload.code : undefined,
+        payload,
+      };
     }
   }
 
   const fallback = await response.text().catch(() => '');
-  return fallback || `Request failed with status ${response.status}`;
+  return {
+    message: fallback || `Request failed with status ${response.status}`,
+  };
 };
 
 export const ApiClient = {
@@ -88,8 +109,24 @@ export const ApiClient = {
         window.dispatchEvent(new Event('auth:unauthorized'));
       }
 
-      const message = await parseErrorMessage(response);
-      throw new ApiError(message, response.status);
+      const { message, code, payload } = await parseErrorPayload(response);
+      const notifyAccessDenied =
+        response.status === 403 &&
+        path !== '/auth/login' &&
+        path !== '/auth/register' &&
+        path !== '/auth/social' &&
+        typeof window !== 'undefined' &&
+        ['ACCOUNT_PENDING', 'ACCOUNT_SUSPENDED', 'ACCOUNT_CANCELLED', 'ACCOUNT_EXPIRED', 'ACCOUNT_PAST_DUE', 'TRIAL_EXPIRED', 'ACCOUNT_DISABLED'].includes(code || '');
+
+      if (notifyAccessDenied) {
+        window.dispatchEvent(
+          new CustomEvent('auth:access-denied', {
+            detail: payload || { error: message, code },
+          }),
+        );
+      }
+
+      throw new ApiError(message, response.status, code, payload);
     }
 
     if (response.status === 204) {

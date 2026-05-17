@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { AuthService, User } from '../services/AuthService';
+import { ApiError } from '../services/apiClient';
 import { BrandLogo } from './BrandLogo';
 
 interface AuthProps {
@@ -14,6 +15,7 @@ export const Auth: React.FC<AuthProps> = ({ onLogin }) => {
   const [socialLoading, setSocialLoading] = useState<'google' | 'apple' | null>(null);
   const [errorMessage, setErrorMessage] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [accessNotice, setAccessNotice] = useState<{ title: string; message: string } | null>(null);
   const socialLoginEnabled = import.meta.env.VITE_ENABLE_SOCIAL_LOGIN === 'true';
 
   const [email, setEmail] = useState('');
@@ -22,6 +24,7 @@ export const Auth: React.FC<AuthProps> = ({ onLogin }) => {
 
   const goToStep = (nextStep: AuthStep) => {
     setErrorMessage('');
+    setAccessNotice(null);
     setStep(nextStep);
   };
 
@@ -29,12 +32,20 @@ export const Auth: React.FC<AuthProps> = ({ onLogin }) => {
     e.preventDefault();
     if (!email || !password) return;
     setErrorMessage('');
+    setAccessNotice(null);
     setLoading(true);
     try {
       const user = await AuthService.loginWithEmail(email, password);
       onLogin(user);
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : 'Erro ao entrar. Tente novamente.');
+      if (error instanceof ApiError && error.status === 403) {
+        setAccessNotice({
+          title: 'Acesso bloqueado',
+          message: error.message,
+        });
+      } else {
+        setErrorMessage(error instanceof Error ? error.message : 'Erro ao entrar. Tente novamente.');
+      }
     } finally {
       setLoading(false);
     }
@@ -44,12 +55,30 @@ export const Auth: React.FC<AuthProps> = ({ onLogin }) => {
     e.preventDefault();
     if (!name || !email || !password) return;
     setErrorMessage('');
+    setAccessNotice(null);
     setLoading(true);
     try {
       const user = await AuthService.register(name, email, password);
       onLogin(user);
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : 'Erro ao criar conta. Tente novamente.');
+      if (
+        error instanceof ApiError &&
+        error.status === 403 &&
+        error.code === 'ACCOUNT_PENDING' &&
+        error.payload?.registrationCreated
+      ) {
+        setAccessNotice({
+          title: 'Conta criada com sucesso',
+          message: 'Seu cadastro foi concluido e agora aguarda aprovacao. Assim que sua conta for liberada, voce podera entrar normalmente.',
+        });
+      } else if (error instanceof ApiError && error.status === 403) {
+        setAccessNotice({
+          title: 'Acesso bloqueado',
+          message: error.message,
+        });
+      } else {
+        setErrorMessage(error instanceof Error ? error.message : 'Erro ao criar conta. Tente novamente.');
+      }
     } finally {
       setLoading(false);
     }
@@ -136,87 +165,107 @@ export const Auth: React.FC<AuthProps> = ({ onLogin }) => {
         </div>
 
         <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-2xl shadow-slate-200/50 space-y-6 animate-slideUp">
-          <form onSubmit={step === 'login' ? handleLogin : handleRegister} className="space-y-4">
-            {step === 'signup' && (
-              <div>
-                <label className={labelClasses}>Nome Profissional</label>
-                <input
-                  type="text"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  className={inputClasses}
-                  placeholder="Nome do seu negocio"
-                  required
-                />
+          {accessNotice ? (
+            <div className="space-y-5 text-center">
+              <div className="rounded-[2rem] border border-amber-200 bg-amber-50 px-6 py-8">
+                <h3 className="text-2xl font-black text-slate-900">{accessNotice.title}</h3>
+                <p className="mt-3 text-sm font-medium leading-7 text-slate-600">{accessNotice.message}</p>
               </div>
-            )}
-
-            <div>
-              <label className={labelClasses}>E-mail</label>
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className={inputClasses}
-                placeholder="exemplo@email.com"
-                required
-              />
+              <button
+                type="button"
+                onClick={() => {
+                  setAccessNotice(null);
+                  setErrorMessage('');
+                  setStep('login');
+                }}
+                className="w-full bg-slate-950 text-white py-[18px] rounded-2xl font-black transition-all active:scale-[0.98] shadow-xl text-lg"
+              >
+                Voltar para o login
+              </button>
             </div>
-
-            <div>
-              <label className={labelClasses}>Senha</label>
-              <div className="relative">
-                <input
-                  type={showPassword ? 'text' : 'password'}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className={passwordInputClasses}
-                  placeholder="**********"
-                  required
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword((current) => !current)}
-                  className="absolute inset-y-0 right-4 my-auto h-fit text-xs font-black uppercase tracking-wider text-slate-400 hover:text-indigo-600 transition-colors"
-                  aria-label={showPassword ? 'Ocultar senha' : 'Mostrar senha'}
-                >
-                  {showPassword ? 'Ocultar' : 'Mostrar'}
-                </button>
-              </div>
+          ) : (
+            <form onSubmit={step === 'login' ? handleLogin : handleRegister} className="space-y-4">
               {step === 'signup' && (
-                <p className="mt-2 ml-1 text-[11px] font-medium text-slate-400">
-                  Use no minimo 10 caracteres com letra maiuscula, minuscula e numero.
-                </p>
+                <div>
+                  <label className={labelClasses}>Nome Profissional</label>
+                  <input
+                    type="text"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    className={inputClasses}
+                    placeholder="Nome do seu negocio"
+                    required
+                  />
+                </div>
               )}
-            </div>
 
-            {errorMessage && (
-              <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-700">
-                {errorMessage}
+              <div>
+                <label className={labelClasses}>E-mail</label>
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className={inputClasses}
+                  placeholder="exemplo@email.com"
+                  required
+                />
               </div>
-            )}
 
-            <button
-              type="submit"
-              disabled={loading || !!socialLoading}
-              className={`w-full text-white py-[18px] rounded-2xl font-black transition-all active:scale-[0.98] shadow-xl text-lg mt-2 disabled:opacity-50 ${
-                step === 'signup' ? 'bg-indigo-600 hover:bg-indigo-700' : 'bg-slate-950 hover:bg-slate-800'
-              }`}
-            >
-              {loading ? (
-                <span className="flex items-center justify-center gap-3">
-                  <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
-                  {step === 'login' ? 'Entrando...' : 'Criando conta...'}
-                </span>
-              ) : step === 'login' ? (
-                'Entrar'
-              ) : (
-                'Comecar Agora'
+              <div>
+                <label className={labelClasses}>Senha</label>
+                <div className="relative">
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className={passwordInputClasses}
+                    placeholder="**********"
+                    required
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword((current) => !current)}
+                    className="absolute inset-y-0 right-4 my-auto h-fit text-xs font-black uppercase tracking-wider text-slate-400 hover:text-indigo-600 transition-colors"
+                    aria-label={showPassword ? 'Ocultar senha' : 'Mostrar senha'}
+                  >
+                    {showPassword ? 'Ocultar' : 'Mostrar'}
+                  </button>
+                </div>
+                {step === 'signup' && (
+                  <p className="mt-2 ml-1 text-[11px] font-medium text-slate-400">
+                    Use no minimo 10 caracteres com letra maiuscula, minuscula e numero.
+                  </p>
+                )}
+              </div>
+
+              {errorMessage && (
+                <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-700">
+                  {errorMessage}
+                </div>
               )}
-            </button>
-          </form>
 
-          {socialLoginEnabled && (
+              <button
+                type="submit"
+                disabled={loading || !!socialLoading}
+                className={`w-full text-white py-[18px] rounded-2xl font-black transition-all active:scale-[0.98] shadow-xl text-lg mt-2 disabled:opacity-50 ${
+                  step === 'signup' ? 'bg-indigo-600 hover:bg-indigo-700' : 'bg-slate-950 hover:bg-slate-800'
+                }`}
+              >
+                {loading ? (
+                  <span className="flex items-center justify-center gap-3">
+                    <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
+                    {step === 'login' ? 'Entrando...' : 'Criando conta...'}
+                  </span>
+                ) : step === 'login' ? (
+                  'Entrar'
+                ) : (
+                  'Comecar Agora'
+                )}
+              </button>
+            </form>
+          )}
+
+          {!accessNotice && socialLoginEnabled && (
             <>
               <div className="relative flex items-center justify-center py-2">
                 <div className="absolute inset-0 flex items-center">
@@ -268,18 +317,20 @@ export const Auth: React.FC<AuthProps> = ({ onLogin }) => {
             </>
           )}
 
-          <div className="text-center">
-            <button
-              type="button"
-              onClick={() => goToStep(step === 'login' ? 'signup' : 'login')}
-              className="text-sm font-bold text-slate-400 hover:text-indigo-600 transition-colors"
-            >
-              {step === 'login' ? 'Nao tem conta?' : 'Ja possui conta?'}{' '}
-              <span className="text-indigo-600 font-black">
-                {step === 'login' ? 'Cadastre-se' : 'Entrar'}
-              </span>
-            </button>
-          </div>
+          {!accessNotice && (
+            <div className="text-center">
+              <button
+                type="button"
+                onClick={() => goToStep(step === 'login' ? 'signup' : 'login')}
+                className="text-sm font-bold text-slate-400 hover:text-indigo-600 transition-colors"
+              >
+                {step === 'login' ? 'Nao tem conta?' : 'Ja possui conta?'}{' '}
+                <span className="text-indigo-600 font-black">
+                  {step === 'login' ? 'Cadastre-se' : 'Entrar'}
+                </span>
+              </button>
+            </div>
+          )}
         </div>
 
         <p className="text-center text-slate-400 text-[10px] font-bold uppercase tracking-widest">

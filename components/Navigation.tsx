@@ -3,6 +3,7 @@ import {
   BoxIcon,
   HomeIcon,
   SalesIcon,
+  ShieldIcon,
   SparkBrainIcon,
   TagIcon,
   UsersIcon,
@@ -13,6 +14,7 @@ import { BrandLogo } from './BrandLogo';
 interface NavigationProps {
   currentView: string;
   setView: (view: string) => void;
+  isAdmin?: boolean;
 }
 
 type NavIconComponent = React.ComponentType<{ className?: string }>;
@@ -23,7 +25,7 @@ interface NavItem {
   icon: NavIconComponent;
 }
 
-export const Navigation: React.FC<NavigationProps> = ({ currentView, setView }) => {
+export const Navigation: React.FC<NavigationProps> = ({ currentView, setView, isAdmin = false }) => {
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const items: NavItem[] = [
@@ -34,6 +36,7 @@ export const Navigation: React.FC<NavigationProps> = ({ currentView, setView }) 
     { id: 'expenses', label: 'CAIXA', icon: WalletIcon },
     { id: 'categories', label: 'CATEGORIAS', icon: TagIcon },
     { id: 'ai', label: 'IA', icon: SparkBrainIcon },
+    ...(isAdmin ? [{ id: 'access', label: 'ACESSO', icon: ShieldIcon }] : []),
   ];
 
   useEffect(() => {

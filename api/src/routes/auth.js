@@ -2,6 +2,15 @@ import crypto from 'crypto';
 import express from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
+import {
+  REGISTRATION_ACCESS_MODE,
+  REGISTRATION_ACCESS_STATUS,
+  USER_ACCESS_SELECT_FIELDS,
+  evaluateAccess,
+  getRegistrationAccessSeed,
+  toAccessDeniedPayload,
+  toPublicAccessMetadata,
+} from '../access.js';
 import { pool } from '../db.js';
 import { requireAuth } from '../middleware/auth.js';
 import { createRateLimit } from '../middleware/rateLimit.js';
@@ -71,6 +80,7 @@ const toPublicUser = (row) => ({
   avatar: row.avatar || null,
   provider: row.provider || 'email',
   emailVerified: Boolean(row.email_verified),
+  ...toPublicAccessMetadata(row),
 });
 
 const authCookieOptions = {
@@ -274,12 +284,12 @@ const registerFailedLoginAttempt = async (client, user) => {
   return lockedUntil;
 };
 
-const resetFailedLoginState = async (client, userId, now) => {
+const resetFailedLoginState = async (client, userId, now, { updateLastLogin = true } = {}) => {
   await client.query(
     `UPDATE users
      SET failed_login_attempts = 0,
          locked_until = NULL,
-         last_login_at = $2,
+         last_login_at = ${updateLastLogin ? '$2' : 'last_login_at'},
          updated_at = $2
      WHERE id = $1`,
     [userId, now]
@@ -370,19 +380,45 @@ router.post('/register', registerRateLimit, async (req, res, next) => {
     await client.query('BEGIN');
 
     const now = Date.now();
+    const registrationAccess = getRegistrationAccessSeed(now);
     const passwordHash = await bcrypt.hash(password, 12);
     const avatar = buildDefaultAvatar(name);
     const created = await client.query(
       `INSERT INTO users (
          email, password_hash, name, avatar, provider, created_at, updated_at, last_login_at,
-         is_active, email_verified, password_updated_at, failed_login_attempts, locked_until
+         is_active, email_verified, password_updated_at, failed_login_attempts, locked_until,
+         is_admin, access_status, access_mode, trial_ends_at, access_expires_at, approved_at
        )
-       VALUES ($1, $2, $3, $4, 'email', $5, $5, $5, TRUE, FALSE, $5, 0, NULL)
-       RETURNING id, email, name, avatar, provider, email_verified`,
-      [email, passwordHash, name, avatar, now]
+       VALUES ($1, $2, $3, $4, 'email', $5, $5, $5, TRUE, FALSE, $5, 0, NULL, $6, $7, $8, $9, $10, $11)
+       RETURNING ${USER_ACCESS_SELECT_FIELDS}`,
+      [
+        email,
+        passwordHash,
+        name,
+        avatar,
+        now,
+        registrationAccess.isAdmin,
+        registrationAccess.accessStatus,
+        registrationAccess.accessMode,
+        registrationAccess.trialEndsAt,
+        registrationAccess.accessExpiresAt,
+        registrationAccess.approvedAt,
+      ]
     );
 
     const user = created.rows[0];
+    const access = evaluateAccess(user, now);
+
+    if (!access.allowed) {
+      await client.query('COMMIT');
+      return res.status(403).json({
+        ...toAccessDeniedPayload(access),
+        registrationCreated: true,
+        registrationAccessStatus: REGISTRATION_ACCESS_STATUS,
+        registrationAccessMode: REGISTRATION_ACCESS_MODE,
+      });
+    }
+
     await issueAuthSession(client, user, req, res);
     await client.query('COMMIT');
 
@@ -413,8 +449,10 @@ router.post('/login', loginRateLimit, async (req, res, next) => {
 
     const userResult = await client.query(
       `SELECT
-         id, email, password_hash, name, avatar, provider, email_verified,
-         failed_login_attempts, locked_until
+         ${USER_ACCESS_SELECT_FIELDS},
+         password_hash,
+         failed_login_attempts,
+         locked_until
        FROM users
        WHERE lower(email) = lower($1)
          AND is_active = TRUE
@@ -445,6 +483,14 @@ router.post('/login', loginRateLimit, async (req, res, next) => {
         return res.status(423).json({ error: buildLockoutMessage(lockedUntil) });
       }
       return res.status(401).json({ error: 'E-mail ou senha invalidos' });
+    }
+
+    const access = evaluateAccess(user, now);
+    if (!access.allowed) {
+      await resetFailedLoginState(client, user.id, now, { updateLastLogin: false });
+      await client.query('COMMIT');
+      clearAuthCookies(res);
+      return res.status(403).json(toAccessDeniedPayload(access));
     }
 
     await resetFailedLoginState(client, user.id, now);
@@ -483,7 +529,7 @@ router.post('/social', socialRateLimit, async (req, res, next) => {
     await client.query('BEGIN');
 
     let userResult = await client.query(
-      `SELECT id, email, name, avatar, provider, email_verified
+      `SELECT ${USER_ACCESS_SELECT_FIELDS}
        FROM users
        WHERE lower(email) = lower($1)
          AND is_active = TRUE
@@ -494,15 +540,30 @@ router.post('/social', socialRateLimit, async (req, res, next) => {
 
     if (!userResult.rowCount) {
       const now = Date.now();
+      const registrationAccess = getRegistrationAccessSeed(now);
       const randomPasswordHash = await bcrypt.hash(crypto.randomBytes(32).toString('hex'), 12);
       userResult = await client.query(
         `INSERT INTO users (
            email, password_hash, name, avatar, provider, created_at, updated_at, last_login_at,
-           is_active, email_verified, password_updated_at, failed_login_attempts, locked_until
+           is_active, email_verified, password_updated_at, failed_login_attempts, locked_until,
+           is_admin, access_status, access_mode, trial_ends_at, access_expires_at, approved_at
          )
-         VALUES ($1, $2, $3, $4, $5, $6, $6, $6, TRUE, TRUE, $6, 0, NULL)
-         RETURNING id, email, name, avatar, provider, email_verified`,
-        [email, randomPasswordHash, name, avatar, provider, now]
+         VALUES ($1, $2, $3, $4, $5, $6, $6, $6, TRUE, TRUE, $6, 0, NULL, $7, $8, $9, $10, $11, $12)
+         RETURNING ${USER_ACCESS_SELECT_FIELDS}`,
+        [
+          email,
+          randomPasswordHash,
+          name,
+          avatar,
+          provider,
+          now,
+          registrationAccess.isAdmin,
+          registrationAccess.accessStatus,
+          registrationAccess.accessMode,
+          registrationAccess.trialEndsAt,
+          registrationAccess.accessExpiresAt,
+          registrationAccess.approvedAt,
+        ]
       );
     } else {
       const now = Date.now();
@@ -518,6 +579,13 @@ router.post('/social', socialRateLimit, async (req, res, next) => {
     }
 
     const user = userResult.rows[0];
+    const access = evaluateAccess(user);
+    if (!access.allowed) {
+      await client.query('COMMIT');
+      clearAuthCookies(res);
+      return res.status(403).json(toAccessDeniedPayload(access));
+    }
+
     await issueAuthSession(client, user, req, res);
     await client.query('COMMIT');
 
@@ -547,13 +615,20 @@ router.post('/refresh', refreshRateLimit, async (req, res, next) => {
     const sessionResult = await client.query(
       `SELECT
          s.id AS session_id,
-         s.user_id,
+         u.id,
          u.email,
          u.name,
          u.avatar,
          u.provider,
          u.email_verified,
-         u.is_active
+         u.is_active,
+         u.access_status,
+         u.access_mode,
+         u.trial_ends_at,
+         u.access_expires_at,
+         u.approved_at,
+         u.suspended_at,
+         u.cancelled_at
        FROM sessions s
        JOIN users u ON u.id = s.user_id
        WHERE s.refresh_token_hash = $1
@@ -572,14 +647,18 @@ router.post('/refresh', refreshRateLimit, async (req, res, next) => {
     }
 
     const session = sessionResult.rows[0];
-    const user = {
-      id: Number(session.user_id),
-      email: session.email,
-      name: session.name,
-      avatar: session.avatar,
-      provider: session.provider,
-      email_verified: session.email_verified,
-    };
+    const access = evaluateAccess(session, now);
+    if (!access.allowed) {
+      await client.query(
+        `UPDATE sessions
+         SET revoked_at = $2
+         WHERE id = $1`,
+        [session.session_id, now]
+      );
+      await client.query('COMMIT');
+      clearAuthCookies(res);
+      return res.status(403).json(toAccessDeniedPayload(access));
+    }
 
     await client.query(
       `UPDATE sessions
@@ -588,10 +667,10 @@ router.post('/refresh', refreshRateLimit, async (req, res, next) => {
       [session.session_id, now]
     );
 
-    await issueAuthSession(client, user, req, res);
+    await issueAuthSession(client, session, req, res);
     await client.query('COMMIT');
 
-    return res.json(toPublicUser(user));
+    return res.json(toPublicUser(session));
   } catch (error) {
     await client.query('ROLLBACK');
     return next(error);
@@ -833,7 +912,7 @@ router.post('/logout-all', requireAuth, async (req, res, next) => {
 router.get('/me', requireAuth, async (req, res, next) => {
   try {
     const result = await pool.query(
-      `SELECT id, email, name, avatar, provider, email_verified
+      `SELECT ${USER_ACCESS_SELECT_FIELDS}
        FROM users
        WHERE id = $1
          AND is_active = TRUE
@@ -846,7 +925,14 @@ router.get('/me', requireAuth, async (req, res, next) => {
       return res.status(401).json({ error: 'Nao autenticado' });
     }
 
-    return res.json(toPublicUser(result.rows[0]));
+    const user = result.rows[0];
+    const access = evaluateAccess(user);
+    if (!access.allowed) {
+      clearAuthCookies(res);
+      return res.status(403).json(toAccessDeniedPayload(access));
+    }
+
+    return res.json(toPublicUser(user));
   } catch (error) {
     return next(error);
   }

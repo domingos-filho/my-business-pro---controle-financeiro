@@ -34,6 +34,10 @@ Copie `.env.example` para `.env` (Docker) ou configure no EasyPanel:
 - `MAX_FAILED_LOGIN_ATTEMPTS`: quantidade maxima de falhas antes de bloqueio temporario
 - `LOGIN_LOCKOUT_MINUTES`: tempo de bloqueio da conta apos excesso de falhas
 - `MAX_ACTIVE_SESSIONS`: limite de sessoes simultaneas por usuario
+- `ADMIN_EMAILS`: lista de e-mails separados por virgula que devem nascer/promover como admins
+- `REGISTRATION_ACCESS_STATUS`: status comercial inicial no cadastro (`PENDING`, `ACTIVE`, `TRIAL`, etc.)
+- `REGISTRATION_ACCESS_MODE`: modo comercial inicial do cadastro (`MANUAL_APPROVAL`, `OPEN_REGISTRATION`, etc.)
+- `REGISTRATION_TRIAL_DAYS`: duracao padrao do trial quando `REGISTRATION_ACCESS_STATUS=TRIAL`
 - `ALLOW_LEGACY_DATA_CLAIM`: habilita endpoint explicito para reivindicar dados legados sem `user_id`
 - `APP_PORT`: porta publicada do frontend web no host (default `40`)
 - `API_PORT`: porta publicada da API no host (default `4000`)
@@ -124,6 +128,29 @@ O modulo de autenticacao agora inclui:
 - alteracao de senha autenticada
 - limite de sessoes simultaneas
 - reivindicacao explicita de legado no lugar de migracao automatica no login
+
+## Controle comercial de acesso (sprint 1 + sprint 2)
+
+O backend agora suporta uma camada de acesso comercial separada da autenticacao:
+
+- `access_status` no usuario (`ACTIVE`, `PENDING`, `TRIAL`, `SUSPENDED`, etc.)
+- `access_mode` para representar a origem/comercializacao da conta
+- bloqueio centralizado por middleware nas rotas protegidas
+- validacao do status em `login`, `refresh` e `me`
+
+O sistema agora suporta:
+
+- metadados comerciais no usuario (`access_status`, `access_mode`, etc.)
+- bloqueio centralizado por middleware
+- painel admin basico em `/api/admin`
+- novos cadastros pendentes por default
+- bootstrap administrativo por `ADMIN_EMAILS`
+
+Recomendacao operacional:
+
+1. configure `ADMIN_EMAILS` com seu e-mail principal
+2. mantenha `REGISTRATION_ACCESS_STATUS=PENDING`
+3. aprove manualmente novas contas no painel admin
 
 ## Estrutura de deploy
 

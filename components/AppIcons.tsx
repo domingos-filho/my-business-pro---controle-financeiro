@@ -230,3 +230,10 @@ export const AlertTriangleIcon: React.FC<IconProps> = ({ className = '' }) => (
     <path d="M12 16.5h.01" />
   </svg>
 );
+
+export const ShieldIcon: React.FC<IconProps> = ({ className = '' }) => (
+  <svg {...baseProps} className={className}>
+    <path d="M12 3.5 5.5 6v5.3c0 4 2.6 7.7 6.5 9.2 3.9-1.5 6.5-5.2 6.5-9.2V6L12 3.5Z" />
+    <path d="m9.5 12 1.7 1.7 3.3-3.7" />
+  </svg>
+);

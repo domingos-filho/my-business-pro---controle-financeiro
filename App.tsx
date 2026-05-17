@@ -1,4 +1,6 @@
 import React, { useEffect, useState } from 'react';
+import { AccessControl } from './components/AccessControl';
+import { AccessStateScreen } from './components/AccessStateScreen';
 import { Advisor } from './components/Advisor';
 import { Categories } from './components/Categories';
 import {
@@ -27,10 +29,18 @@ const VIEW_LABELS: Record<string, string> = {
   expenses: 'Caixa',
   categories: 'Categorias',
   ai: 'IA',
+  access: 'Controle de Acesso',
 };
+
+interface AccessIssue {
+  code?: string;
+  accessStatus?: string;
+  error: string;
+}
 
 const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
+  const [accessIssue, setAccessIssue] = useState<AccessIssue | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [currentView, setView] = useState('dashboard');
   const [syncStats, setSyncStats] = useState<SyncStats>({ pendingCount: 0 });
@@ -49,6 +59,9 @@ const App: React.FC = () => {
       const restoredUser = await AuthService.restoreSession();
       if (!active) return;
       setUser(restoredUser);
+      if (restoredUser) {
+        setAccessIssue(null);
+      }
       setAuthLoading(false);
     };
 
@@ -61,6 +74,7 @@ const App: React.FC = () => {
   useEffect(() => {
     const handler = () => {
       setUser(null);
+      setAccessIssue(null);
       setView('dashboard');
       setAuthLoading(false);
     };
@@ -68,6 +82,21 @@ const App: React.FC = () => {
     window.addEventListener('auth:unauthorized', handler);
     return () => {
       window.removeEventListener('auth:unauthorized', handler);
+    };
+  }, []);
+
+  useEffect(() => {
+    const handler = (event: Event) => {
+      const customEvent = event as CustomEvent<AccessIssue>;
+      setUser(null);
+      setView('dashboard');
+      setAuthLoading(false);
+      setAccessIssue(customEvent.detail || { error: 'Sua conta nao pode acessar a aplicacao.' });
+    };
+
+    window.addEventListener('auth:access-denied', handler as EventListener);
+    return () => {
+      window.removeEventListener('auth:access-denied', handler as EventListener);
     };
   }, []);
 
@@ -92,6 +121,7 @@ const App: React.FC = () => {
   const handleLogout = async () => {
     await AuthService.logout();
     setUser(null);
+    setAccessIssue(null);
     setView('dashboard');
   };
 
@@ -138,6 +168,16 @@ const App: React.FC = () => {
   }
 
   if (!user) {
+    if (accessIssue) {
+      return (
+        <AccessStateScreen
+          accessStatus={accessIssue.accessStatus}
+          message={accessIssue.error}
+          onBackToLogin={() => setAccessIssue(null)}
+        />
+      );
+    }
+
     return <Auth onLogin={setUser} />;
   }
 
@@ -157,6 +197,8 @@ const App: React.FC = () => {
         return <Categories />;
       case 'ai':
         return <Advisor />;
+      case 'access':
+        return <AccessControl />;
       default:
         return <Dashboard />;
     }
@@ -169,7 +211,7 @@ const App: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-[#fcfcfd] flex flex-col md:flex-row overflow-hidden">
-      <Navigation currentView={currentView} setView={setView} />
+      <Navigation currentView={currentView} setView={setView} isAdmin={user.isAdmin} />
 
       <main className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden">
         <header className="flex-shrink-0 z-40 bg-[#fcfcfd]/80 backdrop-blur-md border-b border-slate-100 px-6 py-4 md:px-12">

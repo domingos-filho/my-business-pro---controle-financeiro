@@ -1,0 +1,293 @@
+import React, { useEffect, useMemo, useState } from 'react';
+import { AdminAccessService, AccessLogEntry, AccessStatus, AccessUser } from '../services/AdminAccessService';
+import { CheckCircleIcon, ClockIcon, RefreshIcon, ShieldIcon, UsersIcon } from './AppIcons';
+
+const STATUS_STYLES: Record<string, string> = {
+  ACTIVE: 'bg-emerald-100 text-emerald-700',
+  PENDING: 'bg-amber-100 text-amber-700',
+  TRIAL: 'bg-indigo-100 text-indigo-700',
+  SUSPENDED: 'bg-rose-100 text-rose-700',
+  CANCELLED: 'bg-rose-100 text-rose-700',
+  EXPIRED: 'bg-slate-200 text-slate-700',
+  PAST_DUE: 'bg-orange-100 text-orange-700',
+};
+
+const formatDate = (value: number | null) =>
+  value
+    ? new Date(value).toLocaleString('pt-BR', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+      })
+    : 'Nunca';
+
+export const AccessControl: React.FC = () => {
+  const [users, setUsers] = useState<AccessUser[]>([]);
+  const [logs, setLogs] = useState<AccessLogEntry[]>([]);
+  const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState('');
+  const [summary, setSummary] = useState<{ total: number; filtered: number; byStatus: Partial<Record<AccessStatus, number>> }>({
+    total: 0,
+    filtered: 0,
+    byStatus: {},
+  });
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  const load = async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const [userResponse, logResponse] = await Promise.all([
+        AdminAccessService.listUsers({
+          search: search.trim() || undefined,
+          status: statusFilter || undefined,
+        }),
+        AdminAccessService.listLogs(),
+      ]);
+
+      setUsers(userResponse.items);
+      setSummary(userResponse.summary);
+      setLogs(logResponse);
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : 'Nao foi possivel carregar o controle de acesso.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    load();
+  }, [statusFilter]);
+
+  const summaryCards = useMemo(
+    () => [
+      { label: 'Total de contas', value: summary.total, icon: UsersIcon, tone: 'bg-slate-100 text-slate-700' },
+      { label: 'Pendentes', value: summary.byStatus.PENDING || 0, icon: ClockIcon, tone: 'bg-amber-100 text-amber-700' },
+      { label: 'Ativas', value: summary.byStatus.ACTIVE || 0, icon: CheckCircleIcon, tone: 'bg-emerald-100 text-emerald-700' },
+      { label: 'Suspensas', value: summary.byStatus.SUSPENDED || 0, icon: ShieldIcon, tone: 'bg-rose-100 text-rose-700' },
+    ],
+    [summary],
+  );
+
+  const handleUpdateStatus = async (user: AccessUser, accessStatus: AccessStatus) => {
+    const reason =
+      accessStatus === 'SUSPENDED' || accessStatus === 'CANCELLED'
+        ? window.prompt('Informe o motivo desta alteracao (opcional):', '') || undefined
+        : undefined;
+
+    await AdminAccessService.updateUserAccess(user.id, {
+      accessStatus,
+      reason,
+    });
+    await load();
+  };
+
+  return (
+    <div className="space-y-6 animate-fadeIn">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+        <div>
+          <h2 className="text-3xl font-black text-slate-900 tracking-tight">Controle de Acesso</h2>
+          <p className="text-sm font-medium text-slate-500">
+            Aprove, suspenda e acompanhe o status comercial das contas que usam a aplicacao.
+          </p>
+        </div>
+
+        <button
+          type="button"
+          onClick={load}
+          disabled={loading}
+          className="inline-flex items-center justify-center gap-2 rounded-2xl bg-slate-950 px-5 py-3 text-sm font-black text-white shadow-lg transition-all active:scale-95 disabled:opacity-60"
+        >
+          <RefreshIcon className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+          <span>{loading ? 'Atualizando...' : 'Atualizar dados'}</span>
+        </button>
+      </div>
+
+      {error && (
+        <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-700">
+          {error}
+        </div>
+      )}
+
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        {summaryCards.map((card) => {
+          const Icon = card.icon;
+          return (
+            <div key={card.label} className="rounded-[2rem] border border-slate-100 bg-white p-5 shadow-sm">
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">{card.label}</p>
+                  <p className="mt-2 text-3xl font-black text-slate-950">{card.value}</p>
+                </div>
+                <div className={`flex h-12 w-12 items-center justify-center rounded-2xl ${card.tone}`}>
+                  <Icon className="h-5 w-5" />
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      <section className="rounded-[2rem] border border-slate-100 bg-white p-6 shadow-sm space-y-5">
+        <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_240px_auto]">
+          <div>
+            <label className="ml-1 mb-2 block text-[11px] font-black uppercase tracking-widest text-slate-400">
+              Buscar conta
+            </label>
+            <input
+              type="text"
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Nome ou e-mail"
+              className="w-full rounded-2xl border border-slate-200 bg-slate-50 p-3.5 text-slate-900 font-medium outline-none focus:ring-2 focus:ring-indigo-500"
+            />
+          </div>
+
+          <div>
+            <label className="ml-1 mb-2 block text-[11px] font-black uppercase tracking-widest text-slate-400">
+              Status
+            </label>
+            <select
+              value={statusFilter}
+              onChange={(event) => setStatusFilter(event.target.value)}
+              className="w-full rounded-2xl border border-slate-200 bg-slate-50 p-3.5 text-slate-900 font-medium outline-none focus:ring-2 focus:ring-indigo-500"
+            >
+              <option value="">Todos</option>
+              <option value="PENDING">Pendentes</option>
+              <option value="ACTIVE">Ativas</option>
+              <option value="TRIAL">Trial</option>
+              <option value="SUSPENDED">Suspensas</option>
+              <option value="CANCELLED">Canceladas</option>
+              <option value="EXPIRED">Expiradas</option>
+            </select>
+          </div>
+
+          <button
+            type="button"
+            onClick={load}
+            className="h-[52px] self-end rounded-2xl border border-slate-200 bg-white px-5 text-sm font-black text-slate-700 transition-all hover:border-indigo-300 hover:text-indigo-600 active:scale-95"
+          >
+            Aplicar filtros
+          </button>
+        </div>
+
+        <div className="space-y-4">
+          {users.map((user) => (
+            <article key={user.id} className="rounded-[1.75rem] border border-slate-100 bg-slate-50/60 p-5">
+              <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
+                <div className="space-y-3 min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h3 className="text-lg font-black text-slate-950">{user.name}</h3>
+                    <span className={`rounded-full px-3 py-1 text-[11px] font-black uppercase tracking-wider ${STATUS_STYLES[user.accessStatus] || 'bg-slate-100 text-slate-700'}`}>
+                      {user.accessStatus}
+                    </span>
+                    {user.isAdmin && (
+                      <span className="rounded-full bg-indigo-100 px-3 py-1 text-[11px] font-black uppercase tracking-wider text-indigo-700">
+                        Admin
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                    <div>
+                      <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">E-mail</p>
+                      <p className="mt-1 text-sm font-medium text-slate-700 break-all">{user.email}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Modo</p>
+                      <p className="mt-1 text-sm font-medium text-slate-700">{user.accessMode}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Criada em</p>
+                      <p className="mt-1 text-sm font-medium text-slate-700">{formatDate(user.createdAt)}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Ultimo login</p>
+                      <p className="mt-1 text-sm font-medium text-slate-700">{formatDate(user.lastLoginAt)}</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-1 xl:min-w-[190px]">
+                  {user.accessStatus !== 'ACTIVE' && (
+                    <button
+                      type="button"
+                      onClick={() => handleUpdateStatus(user, 'ACTIVE')}
+                      className="rounded-2xl bg-emerald-600 px-4 py-3 text-sm font-black text-white transition-all hover:bg-emerald-700 active:scale-95"
+                    >
+                      Aprovar / Ativar
+                    </button>
+                  )}
+                  {user.accessStatus !== 'SUSPENDED' && (
+                    <button
+                      type="button"
+                      onClick={() => handleUpdateStatus(user, 'SUSPENDED')}
+                      className="rounded-2xl bg-rose-600 px-4 py-3 text-sm font-black text-white transition-all hover:bg-rose-700 active:scale-95"
+                    >
+                      Suspender
+                    </button>
+                  )}
+                  {user.accessStatus !== 'PENDING' && (
+                    <button
+                      type="button"
+                      onClick={() => handleUpdateStatus(user, 'PENDING')}
+                      className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-black text-slate-700 transition-all hover:border-amber-300 hover:text-amber-700 active:scale-95"
+                    >
+                      Voltar para pendente
+                    </button>
+                  )}
+                </div>
+              </div>
+            </article>
+          ))}
+
+          {!users.length && !loading && (
+            <div className="rounded-[2rem] border border-dashed border-slate-200 bg-slate-50 px-6 py-12 text-center">
+              <p className="text-lg font-black text-slate-800">Nenhuma conta encontrada</p>
+              <p className="mt-2 text-sm font-medium text-slate-400">
+                Ajuste os filtros ou aguarde novos cadastros.
+              </p>
+            </div>
+          )}
+        </div>
+      </section>
+
+      <section className="rounded-[2rem] border border-slate-100 bg-white p-6 shadow-sm space-y-4">
+        <div>
+          <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Auditoria</p>
+          <h3 className="mt-2 text-xl font-black text-slate-950">Ultimas alteracoes de acesso</h3>
+        </div>
+
+        <div className="space-y-3">
+          {logs.map((entry) => (
+            <div key={entry.id} className="rounded-2xl border border-slate-100 bg-slate-50/60 px-4 py-4">
+              <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
+                <div>
+                  <p className="text-sm font-black text-slate-900">
+                    {entry.userName} ({entry.userEmail})
+                  </p>
+                  <p className="mt-1 text-sm font-medium text-slate-500">
+                    {entry.previousStatus || 'N/A'} {'->'} {entry.newStatus || 'N/A'}
+                    {entry.reason ? ` • ${entry.reason}` : ''}
+                  </p>
+                </div>
+                <div className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                  {formatDate(entry.createdAt)}
+                </div>
+              </div>
+            </div>
+          ))}
+
+          {!logs.length && (
+            <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-center text-sm font-medium text-slate-400">
+              Nenhum log de acesso registrado ainda.
+            </div>
+          )}
+        </div>
+      </section>
+    </div>
+  );
+};

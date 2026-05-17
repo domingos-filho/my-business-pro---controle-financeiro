@@ -8,6 +8,14 @@ export interface User {
   avatar?: string | null;
   provider?: 'email' | 'google' | 'apple';
   emailVerified?: boolean;
+  isAdmin?: boolean;
+  accessStatus?: 'PENDING' | 'TRIAL' | 'ACTIVE' | 'PAST_DUE' | 'SUSPENDED' | 'CANCELLED' | 'EXPIRED';
+  accessMode?: 'OPEN_REGISTRATION' | 'MANUAL_APPROVAL' | 'TRIAL' | 'SUBSCRIPTION' | 'INVITE' | 'LIFETIME';
+  trialEndsAt?: number | null;
+  accessExpiresAt?: number | null;
+  approvedAt?: number | null;
+  suspendedAt?: number | null;
+  cancelledAt?: number | null;
 }
 
 export interface SessionInfo {
