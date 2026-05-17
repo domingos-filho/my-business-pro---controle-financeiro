@@ -1,5 +1,14 @@
 import express from 'express';
-import { ACCESS_STATUS, USER_ACCESS_SELECT_FIELDS, evaluateAccess, normalizeAccessMode, normalizeAccessStatus, toPublicAccessMetadata } from '../access.js';
+import {
+  ACCESS_MODE,
+  ACCESS_STATUS,
+  DEFAULT_TRIAL_DAYS,
+  USER_ACCESS_SELECT_FIELDS,
+  evaluateAccess,
+  normalizeAccessMode,
+  normalizeAccessStatus,
+  toPublicAccessMetadata,
+} from '../access.js';
 import { pool } from '../db.js';
 
 const router = express.Router();
@@ -16,6 +25,11 @@ const mutableStatuses = new Set([
 const toPositiveTimestamp = (value) => {
   const parsed = Number(value);
   return Number.isFinite(parsed) && parsed > 0 ? Math.trunc(parsed) : null;
+};
+
+const toPositiveDays = (value, fallback = DEFAULT_TRIAL_DAYS) => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? Math.trunc(parsed) : fallback;
 };
 
 const buildAdminUser = (row) => {
@@ -119,7 +133,8 @@ router.patch('/users/:userId/access', async (req, res, next) => {
   const requestedMode = req.body?.accessMode
     ? normalizeAccessMode(req.body.accessMode)
     : null;
-  const trialEndsAt = toPositiveTimestamp(req.body?.trialEndsAt);
+  const requestedTrialEndsAt = toPositiveTimestamp(req.body?.trialEndsAt);
+  const trialDays = toPositiveDays(req.body?.trialDays);
   const accessExpiresAt = toPositiveTimestamp(req.body?.accessExpiresAt);
 
   if (userId === req.user.id && nextStatus === ACCESS_STATUS.SUSPENDED) {
@@ -149,9 +164,24 @@ router.patch('/users/:userId/access', async (req, res, next) => {
     const previousStatus = normalizeAccessStatus(currentUser.access_status);
     const now = Date.now();
 
-    const nextMode = requestedMode || currentUser.access_mode;
+    const trialEndsAt =
+      nextStatus === ACCESS_STATUS.TRIAL
+        ? requestedTrialEndsAt || now + trialDays * 24 * 60 * 60 * 1000
+        : null;
+
+    if (nextStatus === ACCESS_STATUS.TRIAL && trialEndsAt <= now) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: 'A data de termino do trial precisa estar no futuro.' });
+    }
+
+    const nextMode =
+      nextStatus === ACCESS_STATUS.TRIAL
+        ? ACCESS_MODE.TRIAL
+        : requestedMode || currentUser.access_mode;
     const approvedAt =
-      nextStatus === ACCESS_STATUS.ACTIVE ? currentUser.approved_at || now : currentUser.approved_at;
+      nextStatus === ACCESS_STATUS.ACTIVE || nextStatus === ACCESS_STATUS.TRIAL
+        ? currentUser.approved_at || now
+        : currentUser.approved_at;
     const suspendedAt = nextStatus === ACCESS_STATUS.SUSPENDED ? now : null;
     const cancelledAt = nextStatus === ACCESS_STATUS.CANCELLED ? now : null;
 
@@ -173,7 +203,7 @@ router.patch('/users/:userId/access', async (req, res, next) => {
         userId,
         nextStatus,
         nextMode,
-        nextStatus === ACCESS_STATUS.TRIAL ? trialEndsAt : null,
+        trialEndsAt,
         accessExpiresAt,
         approvedAt,
         req.user.id,
@@ -204,6 +234,7 @@ router.patch('/users/:userId/access', async (req, res, next) => {
       metadata: {
         accessMode: nextMode,
         trialEndsAt,
+        trialDays: nextStatus === ACCESS_STATUS.TRIAL ? trialDays : null,
         accessExpiresAt,
       },
     });

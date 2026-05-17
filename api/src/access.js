@@ -61,6 +61,10 @@ const REGISTRATION_ACCESS_MODE = normalizeAccessMode(
   ACCESS_MODE.MANUAL_APPROVAL,
 );
 const REGISTRATION_TRIAL_DAYS = toPositiveInt(process.env.REGISTRATION_TRIAL_DAYS, 14);
+const DEFAULT_TRIAL_DAYS = toPositiveInt(
+  process.env.DEFAULT_TRIAL_DAYS || process.env.REGISTRATION_TRIAL_DAYS,
+  14,
+);
 const ADMIN_EMAILS = new Set(
   String(process.env.ADMIN_EMAILS || '')
     .split(',')
@@ -207,6 +211,7 @@ export {
   REGISTRATION_ACCESS_MODE,
   REGISTRATION_ACCESS_STATUS,
   REGISTRATION_TRIAL_DAYS,
+  DEFAULT_TRIAL_DAYS,
   ADMIN_EMAILS,
   USER_ACCESS_SELECT_FIELDS,
   evaluateAccess,

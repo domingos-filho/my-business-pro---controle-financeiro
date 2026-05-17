@@ -38,6 +38,7 @@ Copie `.env.example` para `.env` (Docker) ou configure no EasyPanel:
 - `REGISTRATION_ACCESS_STATUS`: status comercial inicial no cadastro (`PENDING`, `ACTIVE`, `TRIAL`, etc.)
 - `REGISTRATION_ACCESS_MODE`: modo comercial inicial do cadastro (`MANUAL_APPROVAL`, `OPEN_REGISTRATION`, etc.)
 - `REGISTRATION_TRIAL_DAYS`: duracao padrao do trial quando `REGISTRATION_ACCESS_STATUS=TRIAL`
+- `DEFAULT_TRIAL_DAYS`: duracao padrao aplicada pelo painel admin ao iniciar/renovar trial
 - `ALLOW_LEGACY_DATA_CLAIM`: habilita endpoint explicito para reivindicar dados legados sem `user_id`
 - `APP_PORT`: porta publicada do frontend web no host (default `40`)
 - `API_PORT`: porta publicada da API no host (default `4000`)
@@ -129,7 +130,7 @@ O modulo de autenticacao agora inclui:
 - limite de sessoes simultaneas
 - reivindicacao explicita de legado no lugar de migracao automatica no login
 
-## Controle comercial de acesso (sprint 1 + sprint 2)
+## Controle comercial de acesso (sprint 1 + sprint 2 + sprint 3)
 
 O backend agora suporta uma camada de acesso comercial separada da autenticacao:
 
@@ -145,12 +146,15 @@ O sistema agora suporta:
 - painel admin basico em `/api/admin`
 - novos cadastros pendentes por default
 - bootstrap administrativo por `ADMIN_EMAILS`
+- ativacao e renovacao de trial pelo painel administrativo
+- expiracao de trial validada no backend em login, refresh e rotas protegidas
 
 Recomendacao operacional:
 
 1. configure `ADMIN_EMAILS` com seu e-mail principal
 2. mantenha `REGISTRATION_ACCESS_STATUS=PENDING`
 3. aprove manualmente novas contas no painel admin
+4. use trial para liberar teste por 7, 14 ou 30 dias antes de ativar definitivamente
 
 ## Estrutura de deploy
 

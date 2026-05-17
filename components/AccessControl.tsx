@@ -23,11 +23,22 @@ const formatDate = (value: number | null) =>
       })
     : 'Nunca';
 
+const formatTrialStatus = (value: number | null) => {
+  if (!value) return 'Sem data definida';
+
+  const diffMs = value - Date.now();
+  if (diffMs <= 0) return 'Expirado';
+
+  const days = Math.ceil(diffMs / (24 * 60 * 60 * 1000));
+  return `${days} dia${days === 1 ? '' : 's'} restante${days === 1 ? '' : 's'}`;
+};
+
 export const AccessControl: React.FC = () => {
   const [users, setUsers] = useState<AccessUser[]>([]);
   const [logs, setLogs] = useState<AccessLogEntry[]>([]);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
+  const [trialDays, setTrialDays] = useState(14);
   const [summary, setSummary] = useState<{ total: number; filtered: number; byStatus: Partial<Record<AccessStatus, number>> }>({
     total: 0,
     filtered: 0,
@@ -67,6 +78,7 @@ export const AccessControl: React.FC = () => {
       { label: 'Total de contas', value: summary.total, icon: UsersIcon, tone: 'bg-slate-100 text-slate-700' },
       { label: 'Pendentes', value: summary.byStatus.PENDING || 0, icon: ClockIcon, tone: 'bg-amber-100 text-amber-700' },
       { label: 'Ativas', value: summary.byStatus.ACTIVE || 0, icon: CheckCircleIcon, tone: 'bg-emerald-100 text-emerald-700' },
+      { label: 'Em trial', value: summary.byStatus.TRIAL || 0, icon: ClockIcon, tone: 'bg-indigo-100 text-indigo-700' },
       { label: 'Suspensas', value: summary.byStatus.SUSPENDED || 0, icon: ShieldIcon, tone: 'bg-rose-100 text-rose-700' },
     ],
     [summary],
@@ -78,11 +90,28 @@ export const AccessControl: React.FC = () => {
         ? window.prompt('Informe o motivo desta alteracao (opcional):', '') || undefined
         : undefined;
 
-    await AdminAccessService.updateUserAccess(user.id, {
-      accessStatus,
-      reason,
-    });
-    await load();
+    try {
+      await AdminAccessService.updateUserAccess(user.id, {
+        accessStatus,
+        reason,
+      });
+      await load();
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : 'Nao foi possivel alterar o acesso da conta.');
+    }
+  };
+
+  const handleStartTrial = async (user: AccessUser) => {
+    try {
+      await AdminAccessService.updateUserAccess(user.id, {
+        accessStatus: 'TRIAL',
+        trialDays,
+        reason: `Trial de ${trialDays} dias`,
+      });
+      await load();
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : 'Nao foi possivel iniciar o trial da conta.');
+    }
   };
 
   return (
@@ -112,7 +141,7 @@ export const AccessControl: React.FC = () => {
         </div>
       )}
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
         {summaryCards.map((card) => {
           const Icon = card.icon;
           return (
@@ -132,7 +161,7 @@ export const AccessControl: React.FC = () => {
       </div>
 
       <section className="rounded-[2rem] border border-slate-100 bg-white p-6 shadow-sm space-y-5">
-        <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_240px_auto]">
+        <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_220px_180px_auto]">
           <div>
             <label className="ml-1 mb-2 block text-[11px] font-black uppercase tracking-widest text-slate-400">
               Buscar conta
@@ -165,6 +194,21 @@ export const AccessControl: React.FC = () => {
             </select>
           </div>
 
+          <div>
+            <label className="ml-1 mb-2 block text-[11px] font-black uppercase tracking-widest text-slate-400">
+              Dias de trial
+            </label>
+            <select
+              value={trialDays}
+              onChange={(event) => setTrialDays(Number(event.target.value))}
+              className="w-full rounded-2xl border border-slate-200 bg-slate-50 p-3.5 text-slate-900 font-medium outline-none focus:ring-2 focus:ring-indigo-500"
+            >
+              <option value={7}>7 dias</option>
+              <option value={14}>14 dias</option>
+              <option value={30}>30 dias</option>
+            </select>
+          </div>
+
           <button
             type="button"
             onClick={load}
@@ -189,9 +233,14 @@ export const AccessControl: React.FC = () => {
                         Admin
                       </span>
                     )}
+                    {user.accessStatus === 'TRIAL' && !user.effectiveAccessAllowed && (
+                      <span className="rounded-full bg-rose-100 px-3 py-1 text-[11px] font-black uppercase tracking-wider text-rose-700">
+                        Trial expirado
+                      </span>
+                    )}
                   </div>
 
-                  <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                  <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
                     <div>
                       <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">E-mail</p>
                       <p className="mt-1 text-sm font-medium text-slate-700 break-all">{user.email}</p>
@@ -207,6 +256,14 @@ export const AccessControl: React.FC = () => {
                     <div>
                       <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Ultimo login</p>
                       <p className="mt-1 text-sm font-medium text-slate-700">{formatDate(user.lastLoginAt)}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Trial</p>
+                      <p className="mt-1 text-sm font-medium text-slate-700">
+                        {user.accessStatus === 'TRIAL'
+                          ? `${formatTrialStatus(user.trialEndsAt)} - ${formatDate(user.trialEndsAt)}`
+                          : 'Nao aplicado'}
+                      </p>
                     </div>
                   </div>
                 </div>
@@ -228,6 +285,24 @@ export const AccessControl: React.FC = () => {
                       className="rounded-2xl bg-rose-600 px-4 py-3 text-sm font-black text-white transition-all hover:bg-rose-700 active:scale-95"
                     >
                       Suspender
+                    </button>
+                  )}
+                  {user.accessStatus !== 'TRIAL' && (
+                    <button
+                      type="button"
+                      onClick={() => handleStartTrial(user)}
+                      className="rounded-2xl bg-indigo-600 px-4 py-3 text-sm font-black text-white transition-all hover:bg-indigo-700 active:scale-95"
+                    >
+                      Iniciar trial
+                    </button>
+                  )}
+                  {user.accessStatus === 'TRIAL' && (
+                    <button
+                      type="button"
+                      onClick={() => handleStartTrial(user)}
+                      className="rounded-2xl border border-indigo-200 bg-white px-4 py-3 text-sm font-black text-indigo-700 transition-all hover:border-indigo-300 hover:bg-indigo-50 active:scale-95"
+                    >
+                      Renovar trial
                     </button>
                   )}
                   {user.accessStatus !== 'PENDING' && (

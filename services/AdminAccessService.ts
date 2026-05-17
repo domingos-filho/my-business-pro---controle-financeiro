@@ -73,6 +73,7 @@ export const AdminAccessService = {
       accessStatus: AccessStatus;
       accessMode?: string;
       reason?: string;
+      trialDays?: number;
       trialEndsAt?: number | null;
       accessExpiresAt?: number | null;
     },
