@@ -87,6 +87,7 @@ export const AccessControl: React.FC = () => {
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const shouldScrollUsersList = users.length > 3;
 
   const load = async () => {
     setLoading(true);
@@ -406,9 +407,16 @@ export const AccessControl: React.FC = () => {
           </button>
         </div>
 
-        <div className="space-y-4">
-          {users.map((user) => (
-            <article key={user.id} className="rounded-[1.75rem] border border-slate-100 bg-slate-50/60 p-5">
+        <div className="rounded-[1.75rem] border border-slate-100 bg-slate-50/40 p-3">
+          <div
+            className={`space-y-4 ${
+              shouldScrollUsersList
+                ? 'max-h-[78vh] overflow-y-auto pr-2 md:max-h-[70vh] xl:max-h-[44rem]'
+                : ''
+            }`}
+          >
+            {users.map((user) => (
+              <article key={user.id} className="rounded-[1.75rem] border border-slate-100 bg-slate-50/60 p-5">
               <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
                 <div className="space-y-3 min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
@@ -504,17 +512,18 @@ export const AccessControl: React.FC = () => {
                   )}
                 </div>
               </div>
-            </article>
-          ))}
+              </article>
+            ))}
 
-          {!users.length && !loading && (
-            <div className="rounded-[2rem] border border-dashed border-slate-200 bg-slate-50 px-6 py-12 text-center">
-              <p className="text-lg font-black text-slate-800">Nenhuma conta encontrada</p>
-              <p className="mt-2 text-sm font-medium text-slate-400">
-                Ajuste os filtros ou aguarde novos cadastros.
-              </p>
-            </div>
-          )}
+            {!users.length && !loading && (
+              <div className="rounded-[2rem] border border-dashed border-slate-200 bg-slate-50 px-6 py-12 text-center">
+                <p className="text-lg font-black text-slate-800">Nenhuma conta encontrada</p>
+                <p className="mt-2 text-sm font-medium text-slate-400">
+                  Ajuste os filtros ou aguarde novos cadastros.
+                </p>
+              </div>
+            )}
+          </div>
         </div>
       </section>
 
