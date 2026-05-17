@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { AccessControl } from './components/AccessControl';
 import { AccessStateScreen } from './components/AccessStateScreen';
 import { Advisor } from './components/Advisor';
@@ -46,6 +46,8 @@ const App: React.FC = () => {
   const [syncStats, setSyncStats] = useState<SyncStats>({ pendingCount: 0 });
   const [showUpdateToast, setShowUpdateToast] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const userMenuRef = useRef<HTMLDivElement>(null);
 
   const updateStats = async () => {
     const stats = await SyncService.getSyncStats();
@@ -114,6 +116,19 @@ const App: React.FC = () => {
     return () => clearInterval(interval);
   }, [currentView, user]);
 
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (!userMenuRef.current?.contains(event.target as Node)) {
+        setUserMenuOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
+
   const handleReload = () => {
     window.location.reload();
   };
@@ -174,6 +189,26 @@ const App: React.FC = () => {
     };
   };
 
+  const getAccountStatusLabel = (currentUser: User, trial: ReturnType<typeof getTrialInfo>) => {
+    if (currentUser.accessStatus === 'TRIAL') {
+      if (!trial) return 'Conta teste';
+      return trial.remainingDays > 0
+        ? `Conta teste - ${trial.remainingDays} dia${trial.remainingDays === 1 ? '' : 's'} restantes`
+        : 'Conta teste - expira hoje';
+    }
+
+    const labels: Record<string, string> = {
+      ACTIVE: 'Ativa',
+      PENDING: 'Pendente',
+      SUSPENDED: 'Suspensa',
+      CANCELLED: 'Cancelada',
+      EXPIRED: 'Expirada',
+      PAST_DUE: 'Pagamento pendente',
+    };
+
+    return labels[currentUser.accessStatus || ''] || 'Ativa';
+  };
+
   if (authLoading) {
     return (
       <div className="min-h-screen bg-slate-950 flex items-center justify-center">
@@ -226,6 +261,7 @@ const App: React.FC = () => {
     `https://ui-avatars.com/api/?name=${encodeURIComponent(user.name)}&background=6366f1&color=fff`;
   const currentViewLabel = VIEW_LABELS[currentView] || currentView;
   const trialInfo = getTrialInfo(user);
+  const accountStatusLabel = getAccountStatusLabel(user, trialInfo);
 
   return (
     <div className="min-h-screen bg-[#fcfcfd] flex flex-col md:flex-row overflow-hidden">
@@ -244,81 +280,101 @@ const App: React.FC = () => {
               </p>
             </div>
 
-            <div className="flex items-center gap-3">
-              {trialInfo && (
-                <div className="hidden sm:flex items-center gap-3 rounded-full border border-amber-200 bg-amber-50 py-1.5 pl-4 pr-2 shadow-sm">
-                  <div className="flex flex-col items-end">
-                    <span className="text-[10px] font-black uppercase tracking-tighter text-amber-800">
-                      Conta teste
-                    </span>
-                    <span className="text-[8px] font-medium uppercase tracking-widest text-amber-600">
-                      {trialInfo.remainingDays > 0
-                        ? `${trialInfo.remainingDays} dia${trialInfo.remainingDays === 1 ? '' : 's'} restantes`
-                        : 'Expira hoje'}
-                    </span>
-                  </div>
-                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-amber-100 text-amber-700">
+            <div ref={userMenuRef} className="relative">
+              <button
+                onClick={() => setUserMenuOpen((current) => !current)}
+                className="flex items-center gap-3 rounded-full border border-slate-200 bg-white py-1.5 pl-2 pr-3 shadow-sm transition-colors hover:bg-slate-50"
+                aria-haspopup="menu"
+                aria-expanded={userMenuOpen}
+              >
+                <img src={avatarSrc} alt={user.name} className="h-8 w-8 rounded-full" />
+                <span className="hidden max-w-[130px] truncate text-[11px] font-black uppercase tracking-wide text-slate-700 sm:block">
+                  {user.name}
+                </span>
+                <span
+                  className={`flex h-7 w-7 items-center justify-center rounded-full ${
+                    syncStats.pendingCount > 0 ? 'bg-amber-100 text-amber-600' : 'bg-emerald-100 text-emerald-600'
+                  }`}
+                >
+                  {syncStats.pendingCount > 0 ? (
                     <ClockIcon className="h-4 w-4" />
+                  ) : (
+                    <CheckCircleIcon className="h-4 w-4" />
+                  )}
+                </span>
+              </button>
+
+              {userMenuOpen && (
+                <div
+                  role="menu"
+                  className="absolute right-0 top-12 z-[120] w-[min(92vw,360px)] rounded-[1.5rem] border border-slate-200 bg-white p-4 shadow-2xl shadow-slate-200/80"
+                >
+                  <div className="flex items-center gap-3 border-b border-slate-100 pb-4">
+                    <img src={avatarSrc} alt={user.name} className="h-11 w-11 rounded-full" />
+                    <div className="min-w-0">
+                      <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Nome</p>
+                      <p className="truncate text-sm font-black text-slate-950">{user.name}</p>
+                    </div>
+                  </div>
+
+                  <div className="space-y-4 py-4">
+                    <div>
+                      <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">E-mail</p>
+                      <p className="mt-1 break-all text-sm font-medium text-slate-700">{user.email}</p>
+                    </div>
+
+                    <div>
+                      <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Status da conta</p>
+                      <div className={`mt-2 inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-black uppercase tracking-wide ${
+                        user.accessStatus === 'TRIAL'
+                          ? 'bg-amber-100 text-amber-700'
+                          : 'bg-emerald-100 text-emerald-700'
+                      }`}>
+                        {user.accessStatus === 'TRIAL' ? <ClockIcon className="h-4 w-4" /> : <CheckCircleIcon className="h-4 w-4" />}
+                        <span>{accountStatusLabel}</span>
+                      </div>
+                      {trialInfo && (
+                        <p className="mt-2 text-xs font-medium text-slate-500">
+                          Expira em {trialInfo.expiresAtLabel}
+                        </p>
+                      )}
+                    </div>
+
+                    <div>
+                      <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Sincronizacao</p>
+                      <p className="mt-1 text-sm font-medium text-slate-700">
+                        {syncStats.pendingCount > 0 ? `${syncStats.pendingCount} pendente(s)` : 'Tudo sincronizado'}
+                      </p>
+                      <p className="mt-1 text-xs font-medium text-slate-400">
+                        Ultima sincronizacao: {formatLastSync(syncStats.lastSync)}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="grid gap-2 border-t border-slate-100 pt-4 sm:grid-cols-2">
+                    <button
+                      onClick={handleSyncNow}
+                      disabled={isSyncing}
+                      className="inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-black text-slate-700 transition-all hover:border-indigo-300 hover:text-indigo-600 active:scale-95 disabled:opacity-60"
+                    >
+                      <RefreshIcon className={`h-4 w-4 ${isSyncing ? 'animate-spin' : ''}`} />
+                      {isSyncing ? 'Sincronizando' : 'Sincronizar'}
+                    </button>
+                    <button
+                      onClick={handleLogout}
+                      className="inline-flex items-center justify-center gap-2 rounded-2xl bg-slate-950 px-4 py-3 text-sm font-black text-white transition-all hover:bg-slate-800 active:scale-95"
+                    >
+                      <LogoutIcon className="h-4 w-4" />
+                      Sair
+                    </button>
                   </div>
                 </div>
               )}
-
-              <button
-                onClick={handleSyncNow}
-                disabled={isSyncing}
-                className={`flex items-center gap-3 bg-white border border-slate-200 pl-4 pr-2 py-1.5 rounded-full shadow-sm hover:border-indigo-200 transition-all active:scale-95 ${isSyncing ? 'opacity-80' : ''}`}
-              >
-                <div className="flex flex-col items-end">
-                  <span className="text-[10px] font-black uppercase tracking-tighter text-slate-950">
-                    {isSyncing
-                      ? 'Sincronizando...'
-                      : syncStats.pendingCount > 0
-                        ? `${syncStats.pendingCount} pendentes`
-                        : 'Sincronizado'}
-                  </span>
-                  <span className="text-[8px] font-medium text-slate-400 uppercase tracking-widest">
-                    {formatLastSync(syncStats.lastSync)}
-                  </span>
-                </div>
-
-                <div
-                  className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${syncStats.pendingCount > 0 ? 'bg-amber-100 text-amber-600' : 'bg-emerald-100 text-emerald-600'}`}
-                >
-                  {isSyncing ? (
-                    <RefreshIcon className="w-4 h-4 animate-spin" />
-                  ) : syncStats.pendingCount > 0 ? (
-                    <ClockIcon className="w-4 h-4" />
-                  ) : (
-                    <CheckCircleIcon className="w-4 h-4" />
-                  )}
-                </div>
-              </button>
-
-              <button
-                onClick={handleLogout}
-                className="flex items-center gap-3 rounded-full border border-slate-200 bg-white py-1.5 pl-2 pr-4 shadow-sm transition-colors hover:bg-slate-50"
-                title="Sair"
-              >
-                <img src={avatarSrc} alt={user.name} className="h-8 w-8 rounded-full" />
-                <span className="max-w-[96px] truncate text-[11px] font-black uppercase tracking-wide text-slate-700 md:max-w-[120px]">
-                  {user.name}
-                </span>
-                <span className="flex h-7 w-7 items-center justify-center rounded-full bg-slate-100 text-slate-500">
-                  <LogoutIcon className="h-4 w-4" />
-                </span>
-              </button>
             </div>
           </div>
         </header>
 
         <div className="flex-1 overflow-y-auto no-scrollbar scroll-smooth">
-          {trialInfo && (
-            <div className="sm:hidden border-b border-amber-100 bg-amber-50 px-6 py-3 text-center text-xs font-black uppercase tracking-wider text-amber-800">
-              Conta teste: {trialInfo.remainingDays > 0
-                ? `${trialInfo.remainingDays} dia${trialInfo.remainingDays === 1 ? '' : 's'} restantes`
-                : 'expira hoje'} - ate {trialInfo.expiresAtLabel}
-            </div>
-          )}
           <div className="max-w-6xl mx-auto p-6 pb-32 md:p-12">{renderView()}</div>
         </div>
       </main>
