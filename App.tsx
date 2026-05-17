@@ -157,6 +157,23 @@ const App: React.FC = () => {
     })} as ${timeStr}`;
   };
 
+  const getTrialInfo = (currentUser: User) => {
+    if (currentUser.accessStatus !== 'TRIAL' || !currentUser.trialEndsAt) return null;
+
+    const expiresAt = new Date(currentUser.trialEndsAt);
+    const remainingMs = currentUser.trialEndsAt - Date.now();
+    const remainingDays = Math.max(0, Math.ceil(remainingMs / (24 * 60 * 60 * 1000)));
+
+    return {
+      remainingDays,
+      expiresAtLabel: expiresAt.toLocaleDateString('pt-BR', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+      }),
+    };
+  };
+
   if (authLoading) {
     return (
       <div className="min-h-screen bg-slate-950 flex items-center justify-center">
@@ -208,6 +225,7 @@ const App: React.FC = () => {
     user.avatar ??
     `https://ui-avatars.com/api/?name=${encodeURIComponent(user.name)}&background=6366f1&color=fff`;
   const currentViewLabel = VIEW_LABELS[currentView] || currentView;
+  const trialInfo = getTrialInfo(user);
 
   return (
     <div className="min-h-screen bg-[#fcfcfd] flex flex-col md:flex-row overflow-hidden">
@@ -227,6 +245,24 @@ const App: React.FC = () => {
             </div>
 
             <div className="flex items-center gap-3">
+              {trialInfo && (
+                <div className="hidden sm:flex items-center gap-3 rounded-full border border-amber-200 bg-amber-50 py-1.5 pl-4 pr-2 shadow-sm">
+                  <div className="flex flex-col items-end">
+                    <span className="text-[10px] font-black uppercase tracking-tighter text-amber-800">
+                      Conta teste
+                    </span>
+                    <span className="text-[8px] font-medium uppercase tracking-widest text-amber-600">
+                      {trialInfo.remainingDays > 0
+                        ? `${trialInfo.remainingDays} dia${trialInfo.remainingDays === 1 ? '' : 's'} restantes`
+                        : 'Expira hoje'}
+                    </span>
+                  </div>
+                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-amber-100 text-amber-700">
+                    <ClockIcon className="h-4 w-4" />
+                  </div>
+                </div>
+              )}
+
               <button
                 onClick={handleSyncNow}
                 disabled={isSyncing}
@@ -276,6 +312,13 @@ const App: React.FC = () => {
         </header>
 
         <div className="flex-1 overflow-y-auto no-scrollbar scroll-smooth">
+          {trialInfo && (
+            <div className="sm:hidden border-b border-amber-100 bg-amber-50 px-6 py-3 text-center text-xs font-black uppercase tracking-wider text-amber-800">
+              Conta teste: {trialInfo.remainingDays > 0
+                ? `${trialInfo.remainingDays} dia${trialInfo.remainingDays === 1 ? '' : 's'} restantes`
+                : 'expira hoje'} - ate {trialInfo.expiresAtLabel}
+            </div>
+          )}
           <div className="max-w-6xl mx-auto p-6 pb-32 md:p-12">{renderView()}</div>
         </div>
       </main>
