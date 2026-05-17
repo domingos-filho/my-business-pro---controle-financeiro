@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+﻿import React, { useEffect, useMemo, useState } from 'react';
 import {
   AccessLogEntry,
   AccessSettings,
@@ -88,6 +88,7 @@ export const AccessControl: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const shouldScrollUsersList = users.length > 3;
+  const shouldScrollAuditList = logs.length > 3;
 
   const load = async () => {
     setLoading(true);
@@ -128,7 +129,7 @@ export const AccessControl: React.FC = () => {
       setSubscriptionUserId((current) => current || (userResponse.items[0] ? String(userResponse.items[0].id) : ''));
       setSubscriptionPlanId((current) => current || (planResponse[0] ? String(planResponse[0].id) : ''));
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : 'Não foi possível carregar o controle de acesso.');
+      setError(requestError instanceof Error ? requestError.message : 'NÃ£o foi possÃ­vel carregar o controle de acesso.');
     } finally {
       setLoading(false);
     }
@@ -152,7 +153,7 @@ export const AccessControl: React.FC = () => {
   const handleUpdateStatus = async (user: AccessUser, accessStatus: AccessStatus) => {
     const reason =
       accessStatus === 'SUSPENDED' || accessStatus === 'CANCELLED'
-        ? window.prompt('Informe o motivo desta alteração (opcional):', '') || undefined
+        ? window.prompt('Informe o motivo desta alteraÃ§Ã£o (opcional):', '') || undefined
         : undefined;
 
     try {
@@ -162,7 +163,7 @@ export const AccessControl: React.FC = () => {
       });
       await load();
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : 'Não foi possível alterar o acesso da conta.');
+      setError(requestError instanceof Error ? requestError.message : 'NÃ£o foi possÃ­vel alterar o acesso da conta.');
     }
   };
 
@@ -175,7 +176,7 @@ export const AccessControl: React.FC = () => {
       });
       await load();
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : 'Não foi possível iniciar o trial da conta.');
+      setError(requestError instanceof Error ? requestError.message : 'NÃ£o foi possÃ­vel iniciar o trial da conta.');
     }
   };
 
@@ -184,7 +185,7 @@ export const AccessControl: React.FC = () => {
     setError('');
     const normalizedInviteEmail = normalizeEmail(inviteEmail);
     if (!isValidEmail(normalizedInviteEmail)) {
-      setError('Informe um e-mail válido para o convite.');
+      setError('Informe um e-mail vÃ¡lido para o convite.');
       return;
     }
 
@@ -199,7 +200,7 @@ export const AccessControl: React.FC = () => {
       setInviteEmail('');
       await load();
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : 'Não foi possível criar o convite.');
+      setError(requestError instanceof Error ? requestError.message : 'NÃ£o foi possÃ­vel criar o convite.');
     }
   };
 
@@ -208,7 +209,7 @@ export const AccessControl: React.FC = () => {
       await AdminAccessService.revokeInvite(invite.id);
       await load();
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : 'Não foi possível revogar o convite.');
+      setError(requestError instanceof Error ? requestError.message : 'NÃ£o foi possÃ­vel revogar o convite.');
     }
   };
 
@@ -228,7 +229,7 @@ export const AccessControl: React.FC = () => {
 
     const normalizedPrice = parseNonNegativeFloat(planPrice, -1);
     if (!Number.isFinite(normalizedPrice) || normalizedPrice < 0) {
-      setError('Informe um valor válido para o plano.');
+      setError('Informe um valor vÃ¡lido para o plano.');
       return;
     }
 
@@ -246,7 +247,7 @@ export const AccessControl: React.FC = () => {
       setSubscriptionPlanId(String(plan.id));
       await load();
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : 'Não foi possível criar o plano.');
+      setError(requestError instanceof Error ? requestError.message : 'NÃ£o foi possÃ­vel criar o plano.');
     }
   };
 
@@ -258,7 +259,7 @@ export const AccessControl: React.FC = () => {
     const planId = parsePositiveInteger(subscriptionPlanId);
 
     if (!userId || !planId) {
-      setError('Selecione usuário e plano para criar a assinatura.');
+      setError('Selecione usuÃ¡rio e plano para criar a assinatura.');
       return;
     }
 
@@ -270,7 +271,7 @@ export const AccessControl: React.FC = () => {
       });
       await load();
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : 'Não foi possível criar a assinatura.');
+      setError(requestError instanceof Error ? requestError.message : 'NÃ£o foi possÃ­vel criar a assinatura.');
     }
   };
 
@@ -282,7 +283,7 @@ export const AccessControl: React.FC = () => {
       });
       await load();
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : 'Não foi possível alterar a assinatura.');
+      setError(requestError instanceof Error ? requestError.message : 'NÃ£o foi possÃ­vel alterar a assinatura.');
     }
   };
 
@@ -299,7 +300,7 @@ export const AccessControl: React.FC = () => {
         <div>
           <h2 className="text-3xl font-black text-slate-900 tracking-tight">Controle de Acesso</h2>
           <p className="text-sm font-medium text-slate-500">
-            Aprove, suspenda e acompanhe o status comercial das contas que usam a aplicação.
+            Aprove, suspenda e acompanhe o status comercial das contas que usam a aplicaÃ§Ã£o.
           </p>
           {settings && (
             <p className="mt-2 text-xs font-bold uppercase tracking-wider text-slate-400">
@@ -392,7 +393,7 @@ export const AccessControl: React.FC = () => {
               {(settings?.trialDayOptions || [7, 14, 30]).map((option) => (
                 <option key={option} value={option}>
                   {option} dias
-                  {settings?.defaultTrialDays === option ? ' (padrão)' : ''}
+                  {settings?.defaultTrialDays === option ? ' (padrÃ£o)' : ''}
                 </option>
               ))}
             </select>
@@ -450,7 +451,7 @@ export const AccessControl: React.FC = () => {
                       <p className="mt-1 text-sm font-medium text-slate-700">{formatDate(user.createdAt)}</p>
                     </div>
                     <div>
-                      <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Último login</p>
+                      <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Ãšltimo login</p>
                       <p className="mt-1 text-sm font-medium text-slate-700">{formatDate(user.lastLoginAt)}</p>
                     </div>
                     <div>
@@ -458,7 +459,7 @@ export const AccessControl: React.FC = () => {
                       <p className="mt-1 text-sm font-medium text-slate-700">
                         {user.accessStatus === 'TRIAL'
                           ? `${formatTrialStatus(user.trialEndsAt)} - ${formatDate(user.trialEndsAt)}`
-                          : 'Não aplicado'}
+                          : 'NÃ£o aplicado'}
                       </p>
                     </div>
                   </div>
@@ -533,7 +534,7 @@ export const AccessControl: React.FC = () => {
             <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Assinaturas</p>
             <h3 className="mt-2 text-xl font-black text-slate-950">Controle comercial recorrente</h3>
             <p className="mt-1 text-sm font-medium text-slate-500">
-              Use esta base manual até conectar um gateway de pagamento. Status inadimplente, cancelado ou expirado bloqueia o acesso.
+              Use esta base manual atÃ© conectar um gateway de pagamento. Status inadimplente, cancelado ou expirado bloqueia o acesso.
             </p>
           </div>
           <p className="text-xs font-bold uppercase tracking-wider text-slate-400">
@@ -565,7 +566,7 @@ export const AccessControl: React.FC = () => {
 
               <div>
                 <label className="ml-1 mb-2 block text-[11px] font-black uppercase tracking-widest text-slate-400">
-                  Código
+                  CÃ³digo
                 </label>
                 <input
                   type="text"
@@ -615,7 +616,7 @@ export const AccessControl: React.FC = () => {
                 >
                   <option value="MONTH">Mensal</option>
                   <option value="YEAR">Anual</option>
-                  <option value="LIFETIME">Vitalício</option>
+                  <option value="LIFETIME">VitalÃ­cio</option>
                 </select>
               </div>
             </div>
@@ -706,7 +707,7 @@ export const AccessControl: React.FC = () => {
 
               <div>
                 <label className="ml-1 mb-2 block text-[11px] font-black uppercase tracking-widest text-slate-400">
-                  Período
+                  PerÃ­odo
                 </label>
                 <select
                   value={subscriptionPeriodDays}
@@ -718,7 +719,7 @@ export const AccessControl: React.FC = () => {
                   {(settings?.subscriptionPeriodOptions || [30, 90, 365]).map((option) => (
                     <option key={option} value={option}>
                       {option} dias
-                      {settings?.defaultSubscriptionPeriodDays === option ? ' (padrão)' : ''}
+                      {settings?.defaultSubscriptionPeriodDays === option ? ' (padrÃ£o)' : ''}
                     </option>
                   ))}
                 </select>
@@ -751,11 +752,11 @@ export const AccessControl: React.FC = () => {
                   </div>
                   <p className="mt-2 text-sm font-medium text-slate-500">
                     {subscription.planName || 'Plano'} - {formatMoney(subscription.planPriceCents, subscription.planCurrency || 'BRL')}
-                    {' | '}Período até{' '}
+                    {' | '}PerÃ­odo atÃ©{' '}
                     {subscription.currentPeriodEnd
                       ? formatDate(subscription.currentPeriodEnd)
                       : subscription.planBillingInterval === 'LIFETIME'
-                        ? 'Vitalício'
+                        ? 'VitalÃ­cio'
                         : 'Sem data'}
                   </p>
                   <p className="mt-1 text-xs font-bold text-slate-400 break-all">
@@ -854,7 +855,7 @@ export const AccessControl: React.FC = () => {
               {(settings?.trialDayOptions || [7, 14, 30]).map((option) => (
                 <option key={option} value={option}>
                   {option} dias
-                  {settings?.defaultTrialDays === option ? ' (padrão)' : ''}
+                  {settings?.defaultTrialDays === option ? ' (padrÃ£o)' : ''}
                 </option>
               ))}
             </select>
@@ -874,7 +875,7 @@ export const AccessControl: React.FC = () => {
               {[3, 7, 14, 30].map((option) => (
                 <option key={option} value={option}>
                   {option} dias
-                  {settings?.defaultInviteExpiresDays === option ? ' (padrão)' : ''}
+                  {settings?.defaultInviteExpiresDays === option ? ' (padrÃ£o)' : ''}
                 </option>
               ))}
             </select>
@@ -955,34 +956,42 @@ export const AccessControl: React.FC = () => {
       <section className="rounded-[2rem] border border-slate-100 bg-white p-6 shadow-sm space-y-4">
         <div>
           <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Auditoria</p>
-          <h3 className="mt-2 text-xl font-black text-slate-950">Últimas alterações de acesso</h3>
+          <h3 className="mt-2 text-xl font-black text-slate-950">Ãšltimas alteraÃ§Ãµes de acesso</h3>
         </div>
 
-        <div className="space-y-3">
-          {logs.map((entry) => (
-            <div key={entry.id} className="rounded-2xl border border-slate-100 bg-slate-50/60 px-4 py-4">
-              <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
-                <div>
-                  <p className="text-sm font-black text-slate-900">
-                    {entry.userName} ({entry.userEmail})
-                  </p>
-                  <p className="mt-1 text-sm font-medium text-slate-500">
-                    {entry.previousStatus || 'N/A'} {'->'} {entry.newStatus || 'N/A'}
-                    {entry.reason ? ` • ${entry.reason}` : ''}
-                  </p>
-                </div>
-                <div className="text-xs font-bold uppercase tracking-wider text-slate-400">
-                  {formatDate(entry.createdAt)}
+        <div className="rounded-[1.75rem] border border-slate-100 bg-slate-50/40 p-3">
+          <div
+            className={`space-y-3 ${
+              shouldScrollAuditList
+                ? 'max-h-[78vh] overflow-y-auto pr-2 md:max-h-[70vh] xl:max-h-[36rem]'
+                : ''
+            }`}
+          >
+            {logs.map((entry) => (
+              <div key={entry.id} className="rounded-2xl border border-slate-100 bg-slate-50/60 px-4 py-4">
+                <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
+                  <div>
+                    <p className="text-sm font-black text-slate-900">
+                      {entry.userName} ({entry.userEmail})
+                    </p>
+                    <p className="mt-1 text-sm font-medium text-slate-500">
+                      {entry.previousStatus || 'N/A'} {'->'} {entry.newStatus || 'N/A'}
+                      {entry.reason ? ` • ${entry.reason}` : ''}
+                    </p>
+                  </div>
+                  <div className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                    {formatDate(entry.createdAt)}
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
+            ))}
 
-          {!logs.length && (
-            <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-center text-sm font-medium text-slate-400">
-              Nenhum log de acesso registrado ainda.
-            </div>
-          )}
+            {!logs.length && (
+              <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-center text-sm font-medium text-slate-400">
+                Nenhum log de acesso registrado ainda.
+              </div>
+            )}
+          </div>
         </div>
       </section>
     </div>
