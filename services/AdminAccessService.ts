@@ -61,6 +61,8 @@ export interface AccessSettings {
   defaultTrialDays: number;
   trialDayOptions: number[];
   defaultInviteExpiresDays: number;
+  defaultSubscriptionPeriodDays: number;
+  subscriptionPeriodOptions: number[];
   registrationAccessStatus: AccessStatus;
   registrationAccessMode: string;
 }
@@ -85,6 +87,46 @@ export interface InviteInfo {
 
 export interface CreatedInvite extends InviteInfo {
   token: string;
+}
+
+export type SubscriptionStatus = 'ACTIVE' | 'TRIALING' | 'PAST_DUE' | 'CANCELLED' | 'EXPIRED';
+export type BillingInterval = 'MONTH' | 'YEAR' | 'LIFETIME';
+
+export interface PlanInfo {
+  id: number;
+  code: string;
+  name: string;
+  description: string | null;
+  priceCents: number;
+  currency: string;
+  billingInterval: BillingInterval;
+  isActive: boolean;
+  features: Record<string, unknown>;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface SubscriptionInfo {
+  id: number;
+  userId: number;
+  planId: number;
+  status: SubscriptionStatus;
+  currentPeriodStart: number | null;
+  currentPeriodEnd: number | null;
+  cancelledAt: number | null;
+  gateway: string | null;
+  gatewayCustomerId: string | null;
+  gatewaySubscriptionId: string | null;
+  metadata: Record<string, unknown>;
+  createdAt: number;
+  updatedAt: number;
+  userEmail: string | null;
+  userName: string | null;
+  planCode: string | null;
+  planName: string | null;
+  planPriceCents: number | null;
+  planCurrency: string | null;
+  planBillingInterval: BillingInterval | null;
 }
 
 export const AdminAccessService = {
@@ -141,6 +183,55 @@ export const AdminAccessService = {
   async revokeInvite(inviteId: number) {
     return ApiClient.request<InviteInfo>(`/admin/invites/${inviteId}/revoke`, {
       method: 'PATCH',
+    });
+  },
+
+  async listPlans() {
+    return ApiClient.request<PlanInfo[]>('/admin/plans');
+  },
+
+  async createPlan(payload: {
+    code?: string;
+    name: string;
+    description?: string;
+    priceCents: number;
+    currency?: string;
+    billingInterval: BillingInterval;
+  }) {
+    return ApiClient.request<PlanInfo>('/admin/plans', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  },
+
+  async listSubscriptions() {
+    return ApiClient.request<SubscriptionInfo[]>('/admin/subscriptions');
+  },
+
+  async createUserSubscription(
+    userId: number,
+    payload: {
+      planId: number;
+      status: SubscriptionStatus;
+      periodDays?: number;
+    },
+  ) {
+    return ApiClient.request<SubscriptionInfo>(`/admin/users/${userId}/subscription`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  },
+
+  async updateSubscription(
+    subscriptionId: number,
+    payload: {
+      status: SubscriptionStatus;
+      periodDays?: number;
+    },
+  ) {
+    return ApiClient.request<SubscriptionInfo>(`/admin/subscriptions/${subscriptionId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
     });
   },
 };

@@ -5,7 +5,11 @@ import {
   AccessStatus,
   AccessUser,
   AdminAccessService,
+  BillingInterval,
   InviteInfo,
+  PlanInfo,
+  SubscriptionInfo,
+  SubscriptionStatus,
 } from '../services/AdminAccessService';
 import { CheckCircleIcon, ClockIcon, RefreshIcon, ShieldIcon, UsersIcon } from './AppIcons';
 
@@ -13,6 +17,7 @@ const STATUS_STYLES: Record<string, string> = {
   ACTIVE: 'bg-emerald-100 text-emerald-700',
   PENDING: 'bg-amber-100 text-amber-700',
   TRIAL: 'bg-indigo-100 text-indigo-700',
+  TRIALING: 'bg-indigo-100 text-indigo-700',
   SUSPENDED: 'bg-rose-100 text-rose-700',
   CANCELLED: 'bg-rose-100 text-rose-700',
   EXPIRED: 'bg-slate-200 text-slate-700',
@@ -30,6 +35,12 @@ const formatDate = (value: number | null) =>
       })
     : 'Nunca';
 
+const formatMoney = (cents: number | null, currency = 'BRL') =>
+  new Intl.NumberFormat('pt-BR', {
+    style: 'currency',
+    currency,
+  }).format((cents || 0) / 100);
+
 const formatTrialStatus = (value: number | null) => {
   if (!value) return 'Sem data definida';
 
@@ -44,10 +55,20 @@ export const AccessControl: React.FC = () => {
   const [users, setUsers] = useState<AccessUser[]>([]);
   const [logs, setLogs] = useState<AccessLogEntry[]>([]);
   const [invites, setInvites] = useState<InviteInfo[]>([]);
+  const [plans, setPlans] = useState<PlanInfo[]>([]);
+  const [subscriptions, setSubscriptions] = useState<SubscriptionInfo[]>([]);
   const [settings, setSettings] = useState<AccessSettings | null>(null);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [trialDays, setTrialDays] = useState(14);
+  const [subscriptionUserId, setSubscriptionUserId] = useState('');
+  const [subscriptionPlanId, setSubscriptionPlanId] = useState('');
+  const [subscriptionPeriodDays, setSubscriptionPeriodDays] = useState(30);
+  const [subscriptionStatus, setSubscriptionStatus] = useState<SubscriptionStatus>('ACTIVE');
+  const [planName, setPlanName] = useState('');
+  const [planCode, setPlanCode] = useState('');
+  const [planPrice, setPlanPrice] = useState('');
+  const [planInterval, setPlanInterval] = useState<BillingInterval>('MONTH');
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteAccessStatus, setInviteAccessStatus] = useState<AccessStatus>('TRIAL');
   const [inviteExpiresInDays, setInviteExpiresInDays] = useState(7);
@@ -64,7 +85,7 @@ export const AccessControl: React.FC = () => {
     setLoading(true);
     setError('');
     try {
-      const [settingsResponse, userResponse, logResponse, inviteResponse] = await Promise.all([
+      const [settingsResponse, userResponse, logResponse, inviteResponse, planResponse, subscriptionResponse] = await Promise.all([
         AdminAccessService.getSettings(),
         AdminAccessService.listUsers({
           search: search.trim() || undefined,
@@ -72,6 +93,8 @@ export const AccessControl: React.FC = () => {
         }),
         AdminAccessService.listLogs(),
         AdminAccessService.listInvites(),
+        AdminAccessService.listPlans(),
+        AdminAccessService.listSubscriptions(),
       ]);
 
       setSettings(settingsResponse);
@@ -85,7 +108,17 @@ export const AccessControl: React.FC = () => {
       setSummary(userResponse.summary);
       setLogs(logResponse);
       setInvites(inviteResponse);
+      setPlans(planResponse);
+      setSubscriptions(subscriptionResponse);
       setInviteExpiresInDays((current) => (!settings ? settingsResponse.defaultInviteExpiresDays : current));
+      setSubscriptionPeriodDays((current) => {
+        if (!settings) return settingsResponse.defaultSubscriptionPeriodDays;
+        return settingsResponse.subscriptionPeriodOptions.includes(current)
+          ? current
+          : settingsResponse.defaultSubscriptionPeriodDays;
+      });
+      setSubscriptionUserId((current) => current || (userResponse.items[0] ? String(userResponse.items[0].id) : ''));
+      setSubscriptionPlanId((current) => current || (planResponse[0] ? String(planResponse[0].id) : ''));
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : 'Nao foi possivel carregar o controle de acesso.');
     } finally {
@@ -163,6 +196,70 @@ export const AccessControl: React.FC = () => {
       await load();
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : 'Nao foi possivel revogar o convite.');
+    }
+  };
+
+  const handleCreatePlan = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setError('');
+
+    const normalizedPrice = Number(planPrice.replace(',', '.'));
+    if (!Number.isFinite(normalizedPrice) || normalizedPrice < 0) {
+      setError('Informe um valor valido para o plano.');
+      return;
+    }
+
+    try {
+      const plan = await AdminAccessService.createPlan({
+        code: planCode.trim() || undefined,
+        name: planName.trim(),
+        priceCents: Math.round(normalizedPrice * 100),
+        currency: 'BRL',
+        billingInterval: planInterval,
+      });
+      setPlanName('');
+      setPlanCode('');
+      setPlanPrice('');
+      setSubscriptionPlanId(String(plan.id));
+      await load();
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : 'Nao foi possivel criar o plano.');
+    }
+  };
+
+  const handleCreateSubscription = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setError('');
+
+    const userId = Number(subscriptionUserId);
+    const planId = Number(subscriptionPlanId);
+
+    if (!Number.isInteger(userId) || !Number.isInteger(planId)) {
+      setError('Selecione usuario e plano para criar a assinatura.');
+      return;
+    }
+
+    try {
+      await AdminAccessService.createUserSubscription(userId, {
+        planId,
+        status: subscriptionStatus,
+        periodDays: subscriptionPeriodDays,
+      });
+      await load();
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : 'Nao foi possivel criar a assinatura.');
+    }
+  };
+
+  const handleUpdateSubscription = async (subscription: SubscriptionInfo, status: SubscriptionStatus) => {
+    try {
+      await AdminAccessService.updateSubscription(subscription.id, {
+        status,
+        periodDays: subscriptionPeriodDays,
+      });
+      await load();
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : 'Nao foi possivel alterar a assinatura.');
     }
   };
 
@@ -392,6 +489,256 @@ export const AccessControl: React.FC = () => {
               <p className="mt-2 text-sm font-medium text-slate-400">
                 Ajuste os filtros ou aguarde novos cadastros.
               </p>
+            </div>
+          )}
+        </div>
+      </section>
+
+      <section className="rounded-[2rem] border border-slate-100 bg-white p-6 shadow-sm space-y-6">
+        <div className="flex flex-col gap-2 lg:flex-row lg:items-end lg:justify-between">
+          <div>
+            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Assinaturas</p>
+            <h3 className="mt-2 text-xl font-black text-slate-950">Controle comercial recorrente</h3>
+            <p className="mt-1 text-sm font-medium text-slate-500">
+              Use esta base manual ate conectar um gateway de pagamento. Status inadimplente, cancelado ou expirado bloqueia o acesso.
+            </p>
+          </div>
+          <p className="text-xs font-bold uppercase tracking-wider text-slate-400">
+            {subscriptions.length} assinatura{subscriptions.length === 1 ? '' : 's'} registrada{subscriptions.length === 1 ? '' : 's'}
+          </p>
+        </div>
+
+        <div className="grid gap-5 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
+          <form onSubmit={handleCreatePlan} className="rounded-[1.75rem] border border-slate-100 bg-slate-50/60 p-5">
+            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Planos</p>
+            <h4 className="mt-2 text-lg font-black text-slate-950">Criar plano</h4>
+
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              <div>
+                <label className="ml-1 mb-2 block text-[11px] font-black uppercase tracking-widest text-slate-400">
+                  Nome
+                </label>
+                <input
+                  type="text"
+                  value={planName}
+                  onChange={(event) => setPlanName(event.target.value)}
+                  placeholder="Profissional"
+                  className="w-full rounded-2xl border border-slate-200 bg-white p-3.5 text-slate-900 font-medium outline-none focus:ring-2 focus:ring-indigo-500"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="ml-1 mb-2 block text-[11px] font-black uppercase tracking-widest text-slate-400">
+                  Codigo
+                </label>
+                <input
+                  type="text"
+                  value={planCode}
+                  onChange={(event) => setPlanCode(event.target.value)}
+                  placeholder="professional"
+                  className="w-full rounded-2xl border border-slate-200 bg-white p-3.5 text-slate-900 font-medium outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+              </div>
+
+              <div>
+                <label className="ml-1 mb-2 block text-[11px] font-black uppercase tracking-widest text-slate-400">
+                  Valor
+                </label>
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  value={planPrice}
+                  onChange={(event) => setPlanPrice(event.target.value)}
+                  placeholder="49,90"
+                  className="w-full rounded-2xl border border-slate-200 bg-white p-3.5 text-slate-900 font-medium outline-none focus:ring-2 focus:ring-indigo-500"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="ml-1 mb-2 block text-[11px] font-black uppercase tracking-widest text-slate-400">
+                  Intervalo
+                </label>
+                <select
+                  value={planInterval}
+                  onChange={(event) => setPlanInterval(event.target.value as BillingInterval)}
+                  className="w-full rounded-2xl border border-slate-200 bg-white p-3.5 text-slate-900 font-medium outline-none focus:ring-2 focus:ring-indigo-500"
+                >
+                  <option value="MONTH">Mensal</option>
+                  <option value="YEAR">Anual</option>
+                  <option value="LIFETIME">Vitalicio</option>
+                </select>
+              </div>
+            </div>
+
+            <button
+              type="submit"
+              className="mt-4 w-full rounded-2xl bg-slate-950 px-5 py-3 text-sm font-black text-white transition-all hover:bg-slate-800 active:scale-95"
+            >
+              Criar plano
+            </button>
+
+            <div className="mt-4 space-y-2">
+              {plans.slice(0, 4).map((plan) => (
+                <div key={plan.id} className="flex items-center justify-between gap-3 rounded-2xl border border-slate-100 bg-white px-4 py-3">
+                  <div className="min-w-0">
+                    <p className="text-sm font-black text-slate-950 truncate">{plan.name}</p>
+                    <p className="text-xs font-bold text-slate-400">
+                      {plan.code} - {formatMoney(plan.priceCents, plan.currency)} / {plan.billingInterval}
+                    </p>
+                  </div>
+                  <span className={`rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-wider ${plan.isActive ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-700'}`}>
+                    {plan.isActive ? 'Ativo' : 'Inativo'}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </form>
+
+          <form onSubmit={handleCreateSubscription} className="rounded-[1.75rem] border border-slate-100 bg-slate-50/60 p-5">
+            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Nova assinatura</p>
+            <h4 className="mt-2 text-lg font-black text-slate-950">Ativar cliente</h4>
+
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              <div>
+                <label className="ml-1 mb-2 block text-[11px] font-black uppercase tracking-widest text-slate-400">
+                  Conta
+                </label>
+                <select
+                  value={subscriptionUserId}
+                  onChange={(event) => setSubscriptionUserId(event.target.value)}
+                  className="w-full rounded-2xl border border-slate-200 bg-white p-3.5 text-slate-900 font-medium outline-none focus:ring-2 focus:ring-indigo-500"
+                  required
+                >
+                  {users.map((user) => (
+                    <option key={user.id} value={user.id}>
+                      {user.name} - {user.email}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="ml-1 mb-2 block text-[11px] font-black uppercase tracking-widest text-slate-400">
+                  Plano
+                </label>
+                <select
+                  value={subscriptionPlanId}
+                  onChange={(event) => setSubscriptionPlanId(event.target.value)}
+                  className="w-full rounded-2xl border border-slate-200 bg-white p-3.5 text-slate-900 font-medium outline-none focus:ring-2 focus:ring-indigo-500"
+                  required
+                >
+                  {plans.filter((plan) => plan.isActive).map((plan) => (
+                    <option key={plan.id} value={plan.id}>
+                      {plan.name} - {formatMoney(plan.priceCents, plan.currency)}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="ml-1 mb-2 block text-[11px] font-black uppercase tracking-widest text-slate-400">
+                  Status
+                </label>
+                <select
+                  value={subscriptionStatus}
+                  onChange={(event) => setSubscriptionStatus(event.target.value as SubscriptionStatus)}
+                  className="w-full rounded-2xl border border-slate-200 bg-white p-3.5 text-slate-900 font-medium outline-none focus:ring-2 focus:ring-indigo-500"
+                >
+                  <option value="ACTIVE">Ativa</option>
+                  <option value="TRIALING">Trial comercial</option>
+                  <option value="PAST_DUE">Inadimplente</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="ml-1 mb-2 block text-[11px] font-black uppercase tracking-widest text-slate-400">
+                  Periodo
+                </label>
+                <select
+                  value={subscriptionPeriodDays}
+                  onChange={(event) => setSubscriptionPeriodDays(Number(event.target.value))}
+                  className="w-full rounded-2xl border border-slate-200 bg-white p-3.5 text-slate-900 font-medium outline-none focus:ring-2 focus:ring-indigo-500"
+                >
+                  {(settings?.subscriptionPeriodOptions || [30, 90, 365]).map((option) => (
+                    <option key={option} value={option}>
+                      {option} dias
+                      {settings?.defaultSubscriptionPeriodDays === option ? ' (padrao)' : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <button
+              type="submit"
+              disabled={!plans.length || !users.length}
+              className="mt-4 w-full rounded-2xl bg-indigo-600 px-5 py-3 text-sm font-black text-white transition-all hover:bg-indigo-700 active:scale-95 disabled:opacity-50"
+            >
+              Criar assinatura
+            </button>
+          </form>
+        </div>
+
+        <div className="space-y-3">
+          {subscriptions.slice(0, 8).map((subscription) => (
+            <article key={subscription.id} className="rounded-2xl border border-slate-100 bg-slate-50/60 p-4">
+              <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="font-black text-slate-950 break-all">{subscription.userName || subscription.userEmail}</p>
+                    <span className={`rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-wider ${STATUS_STYLES[subscription.status] || 'bg-slate-100 text-slate-700'}`}>
+                      {subscription.status}
+                    </span>
+                    <span className="rounded-full bg-slate-200 px-3 py-1 text-[10px] font-black uppercase tracking-wider text-slate-700">
+                      {subscription.gateway || 'manual'}
+                    </span>
+                  </div>
+                  <p className="mt-2 text-sm font-medium text-slate-500">
+                    {subscription.planName || 'Plano'} - {formatMoney(subscription.planPriceCents, subscription.planCurrency || 'BRL')}
+                    {' | '}Periodo ate{' '}
+                    {subscription.currentPeriodEnd
+                      ? formatDate(subscription.currentPeriodEnd)
+                      : subscription.planBillingInterval === 'LIFETIME'
+                        ? 'Vitalicio'
+                        : 'Sem data'}
+                  </p>
+                  <p className="mt-1 text-xs font-bold text-slate-400 break-all">
+                    {subscription.userEmail}
+                  </p>
+                </div>
+
+                <div className="grid gap-2 sm:grid-cols-3 xl:min-w-[460px]">
+                  <button
+                    type="button"
+                    onClick={() => handleUpdateSubscription(subscription, 'ACTIVE')}
+                    className="rounded-2xl bg-emerald-600 px-4 py-3 text-sm font-black text-white transition-all hover:bg-emerald-700 active:scale-95"
+                  >
+                    Renovar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleUpdateSubscription(subscription, 'PAST_DUE')}
+                    className="rounded-2xl border border-orange-200 bg-white px-4 py-3 text-sm font-black text-orange-700 transition-all hover:bg-orange-50 active:scale-95"
+                  >
+                    Inadimplente
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleUpdateSubscription(subscription, 'CANCELLED')}
+                    className="rounded-2xl border border-rose-200 bg-white px-4 py-3 text-sm font-black text-rose-700 transition-all hover:bg-rose-50 active:scale-95"
+                  >
+                    Cancelar
+                  </button>
+                </div>
+              </div>
+            </article>
+          ))}
+
+          {!subscriptions.length && (
+            <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-center text-sm font-medium text-slate-400">
+              Nenhuma assinatura criada ainda.
             </div>
           )}
         </div>

@@ -201,6 +201,101 @@ const createInviteIndexesSql = [
   'CREATE INDEX IF NOT EXISTS invites_created_by_idx ON invites (created_by);',
 ];
 
+const createPlansTableSql = `
+  CREATE TABLE IF NOT EXISTS plans (
+    id SERIAL PRIMARY KEY,
+    code TEXT NOT NULL,
+    name TEXT NOT NULL,
+    description TEXT NULL,
+    price_cents INTEGER NOT NULL DEFAULT 0,
+    currency TEXT NOT NULL DEFAULT 'BRL',
+    billing_interval TEXT NOT NULL DEFAULT 'MONTH',
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    features JSONB NOT NULL DEFAULT '{}'::jsonb,
+    created_at BIGINT NOT NULL,
+    updated_at BIGINT NOT NULL
+  );
+`;
+
+const createPlanIndexesSql = [
+  'CREATE UNIQUE INDEX IF NOT EXISTS plans_code_unique_idx ON plans (lower(code));',
+  'CREATE INDEX IF NOT EXISTS plans_is_active_idx ON plans (is_active);',
+  'CREATE INDEX IF NOT EXISTS plans_billing_interval_idx ON plans (billing_interval);',
+];
+
+const createSubscriptionsTableSql = `
+  CREATE TABLE IF NOT EXISTS subscriptions (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    plan_id INTEGER NOT NULL REFERENCES plans(id) ON DELETE RESTRICT,
+    status TEXT NOT NULL,
+    current_period_start BIGINT NULL,
+    current_period_end BIGINT NULL,
+    cancelled_at BIGINT NULL,
+    gateway TEXT NULL,
+    gateway_customer_id TEXT NULL,
+    gateway_subscription_id TEXT NULL,
+    metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+    created_at BIGINT NOT NULL,
+    updated_at BIGINT NOT NULL
+  );
+`;
+
+const createSubscriptionIndexesSql = [
+  'CREATE INDEX IF NOT EXISTS subscriptions_user_id_idx ON subscriptions (user_id);',
+  'CREATE INDEX IF NOT EXISTS subscriptions_plan_id_idx ON subscriptions (plan_id);',
+  'CREATE INDEX IF NOT EXISTS subscriptions_status_idx ON subscriptions (status);',
+  'CREATE INDEX IF NOT EXISTS subscriptions_current_period_end_idx ON subscriptions (current_period_end);',
+  'CREATE INDEX IF NOT EXISTS subscriptions_gateway_subscription_id_idx ON subscriptions (gateway_subscription_id);',
+  `CREATE UNIQUE INDEX IF NOT EXISTS subscriptions_gateway_unique_idx
+   ON subscriptions (gateway, gateway_subscription_id)
+   WHERE gateway IS NOT NULL AND gateway_subscription_id IS NOT NULL;`,
+];
+
+const createPaymentEventsTableSql = `
+  CREATE TABLE IF NOT EXISTS payment_events (
+    id SERIAL PRIMARY KEY,
+    subscription_id INTEGER NULL REFERENCES subscriptions(id) ON DELETE SET NULL,
+    user_id INTEGER NULL REFERENCES users(id) ON DELETE SET NULL,
+    gateway TEXT NOT NULL,
+    event_type TEXT NOT NULL,
+    external_event_id TEXT NULL,
+    payload JSONB NOT NULL DEFAULT '{}'::jsonb,
+    processed_at BIGINT NULL,
+    created_at BIGINT NOT NULL
+  );
+`;
+
+const createPaymentEventIndexesSql = [
+  'CREATE INDEX IF NOT EXISTS payment_events_subscription_id_idx ON payment_events (subscription_id);',
+  'CREATE INDEX IF NOT EXISTS payment_events_user_id_idx ON payment_events (user_id);',
+  'CREATE INDEX IF NOT EXISTS payment_events_gateway_idx ON payment_events (gateway);',
+  'CREATE INDEX IF NOT EXISTS payment_events_event_type_idx ON payment_events (event_type);',
+  'CREATE INDEX IF NOT EXISTS payment_events_created_at_idx ON payment_events (created_at);',
+  `CREATE UNIQUE INDEX IF NOT EXISTS payment_events_external_unique_idx
+   ON payment_events (gateway, external_event_id)
+   WHERE external_event_id IS NOT NULL;`,
+];
+
+const DEFAULT_PLANS = [
+  {
+    code: 'starter',
+    name: 'Starter',
+    description: 'Plano base para uso comercial manual antes da integracao com gateway.',
+    priceCents: 0,
+    currency: 'BRL',
+    billingInterval: 'MONTH',
+  },
+  {
+    code: 'professional',
+    name: 'Profissional',
+    description: 'Plano principal para clientes ativos.',
+    priceCents: 0,
+    currency: 'BRL',
+    billingInterval: 'MONTH',
+  },
+];
+
 const adminEmails = String(process.env.ADMIN_EMAILS || '')
   .split(',')
   .map((email) => email.trim().toLowerCase())
@@ -307,6 +402,41 @@ const seedSystemCategories = async (client) => {
   }
 };
 
+const seedDefaultPlans = async (client) => {
+  const now = Date.now();
+
+  for (const plan of DEFAULT_PLANS) {
+    await client.query(
+      `INSERT INTO plans (
+         code,
+         name,
+         description,
+         price_cents,
+         currency,
+         billing_interval,
+         is_active,
+         features,
+         created_at,
+         updated_at
+       )
+       VALUES ($1, $2, $3, $4, $5, $6, TRUE, '{}'::jsonb, $7, $7)
+       ON CONFLICT ((lower(code))) DO UPDATE
+       SET name = EXCLUDED.name,
+           description = COALESCE(plans.description, EXCLUDED.description),
+           updated_at = EXCLUDED.updated_at`,
+      [
+        plan.code,
+        plan.name,
+        plan.description,
+        plan.priceCents,
+        plan.currency,
+        plan.billingInterval,
+        now,
+      ],
+    );
+  }
+};
+
 const ensureAdminEmails = async (client) => {
   if (!adminEmails.length) {
     return;
@@ -355,6 +485,21 @@ const ensureSchema = async () => {
       await client.query(stmt);
     }
 
+    await client.query(createPlansTableSql);
+    for (const stmt of createPlanIndexesSql) {
+      await client.query(stmt);
+    }
+
+    await client.query(createSubscriptionsTableSql);
+    for (const stmt of createSubscriptionIndexesSql) {
+      await client.query(stmt);
+    }
+
+    await client.query(createPaymentEventsTableSql);
+    for (const stmt of createPaymentEventIndexesSql) {
+      await client.query(stmt);
+    }
+
     await client.query(createAiProductAnalysesTableSql);
     for (const stmt of createAiProductAnalysesIndexesSql) {
       await client.query(stmt);
@@ -379,6 +524,7 @@ const ensureSchema = async () => {
       await client.query(stmt);
     }
     await ensureAdminEmails(client);
+    await seedDefaultPlans(client);
     await seedSystemCategories(client);
   } finally {
     client.release();

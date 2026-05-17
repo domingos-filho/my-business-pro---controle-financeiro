@@ -41,6 +41,8 @@ Copie `.env.example` para `.env` (Docker) ou configure no EasyPanel:
 - `DEFAULT_TRIAL_DAYS`: duracao padrao aplicada pelo painel admin ao iniciar/renovar trial
 - `TRIAL_DAY_OPTIONS`: opcoes exibidas no painel admin para iniciar/renovar trial, separadas por virgula
 - `DEFAULT_INVITE_EXPIRES_DAYS`: validade padrao dos convites gerados no painel admin
+- `DEFAULT_SUBSCRIPTION_PERIOD_DAYS`: periodo padrao aplicado pelo painel admin ao criar/renovar assinatura
+- `SUBSCRIPTION_PERIOD_OPTIONS`: opcoes exibidas no painel admin para periodos de assinatura, separadas por virgula
 - `INVITE_TOKEN_SECRET`: segredo opcional para hash dos convites (fallback para `JWT_REFRESH_SECRET`)
 - `ALLOW_LEGACY_DATA_CLAIM`: habilita endpoint explicito para reivindicar dados legados sem `user_id`
 - `APP_PORT`: porta publicada do frontend web no host (default `40`)
@@ -153,6 +155,9 @@ O sistema agora suporta:
 - expiracao de trial validada no backend em login, refresh e rotas protegidas
 - convites de uso unico com token hasheado no banco
 - cadastro por convite com status inicial controlado pelo admin
+- planos e assinaturas manuais para comercializacao inicial sem gateway
+- sincronizacao automatica entre assinatura e `access_status`
+- bloqueio de acesso quando assinatura fica inadimplente, cancelada ou expirada
 
 Recomendacao operacional:
 
@@ -161,8 +166,26 @@ Recomendacao operacional:
 3. aprove manualmente novas contas no painel admin
 4. use trial para liberar teste por 7, 14 ou 30 dias antes de ativar definitivamente
 5. use convites quando quiser liberar onboarding direto por link controlado
+6. use assinaturas manuais para ativar clientes pagantes ate integrar um gateway
 
 Com `REGISTRATION_ACCESS_STATUS=PENDING`, novos usuarios nao entram em trial automaticamente. Para cadastro ja nascer em teste, use `REGISTRATION_ACCESS_STATUS=TRIAL` e ajuste `REGISTRATION_TRIAL_DAYS`.
+
+## Base comercial de assinaturas
+
+O painel de Acesso possui uma camada manual de billing para preparar a venda do app:
+
+- tabela `plans` para cadastrar planos comerciais
+- tabela `subscriptions` para registrar assinaturas por usuario
+- tabela `payment_events` preparada para webhooks de gateway no futuro
+- rotas administrativas para criar planos, criar assinatura, renovar, marcar inadimplente e cancelar
+
+Enquanto nao houver gateway conectado, a cobranca ainda deve ser feita fora do app. O status da assinatura controla o acesso:
+
+- `ACTIVE`: usuario fica `ACTIVE/SUBSCRIPTION`
+- `TRIALING`: usuario fica `TRIAL`
+- `PAST_DUE`: usuario fica bloqueado por pendencia
+- `CANCELLED`: usuario fica cancelado e sessoes sao revogadas
+- `EXPIRED`: usuario fica expirado e sessoes sao revogadas
 
 ## Estrutura de deploy
 

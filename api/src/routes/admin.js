@@ -15,6 +15,17 @@ import {
 } from '../access.js';
 import { pool } from '../db.js';
 import { createInviteToken, hashInviteToken } from '../invites.js';
+import {
+  BILLING_INTERVAL,
+  DEFAULT_SUBSCRIPTION_PERIOD_DAYS,
+  SUBSCRIPTION_PERIOD_OPTIONS,
+  SUBSCRIPTION_STATUS,
+  isSubscriptionAccessAllowed,
+  normalizeBillingInterval,
+  normalizeSubscriptionStatus,
+  subscriptionStatusToAccessMode,
+  subscriptionStatusToAccessStatus,
+} from '../subscriptions.js';
 
 const router = express.Router();
 
@@ -22,6 +33,7 @@ const mutableStatuses = new Set([
   ACCESS_STATUS.PENDING,
   ACCESS_STATUS.TRIAL,
   ACCESS_STATUS.ACTIVE,
+  ACCESS_STATUS.PAST_DUE,
   ACCESS_STATUS.SUSPENDED,
   ACCESS_STATUS.CANCELLED,
   ACCESS_STATUS.EXPIRED,
@@ -38,7 +50,24 @@ const toPositiveDays = (value, fallback = DEFAULT_TRIAL_DAYS) => {
 };
 
 const inviteStatuses = new Set([ACCESS_STATUS.PENDING, ACCESS_STATUS.TRIAL, ACCESS_STATUS.ACTIVE]);
+const subscriptionStatuses = new Set(Object.values(SUBSCRIPTION_STATUS));
+const billingIntervals = new Set(Object.values(BILLING_INTERVAL));
 const validEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+
+const normalizePlanCode = (value) =>
+  String(value || '')
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9_-]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 50);
+
+const toNonNegativeCents = (value) => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed >= 0 ? Math.trunc(parsed) : null;
+};
 
 const buildAdminUser = (row) => {
   const access = evaluateAccess(row);
@@ -85,6 +114,47 @@ const buildInvite = (row) => {
   };
 };
 
+const buildPlan = (row) => ({
+  id: Number(row.id),
+  code: row.code,
+  name: row.name,
+  description: row.description || null,
+  priceCents: Number(row.price_cents || 0),
+  currency: row.currency || 'BRL',
+  billingInterval: normalizeBillingInterval(row.billing_interval),
+  isActive: Boolean(row.is_active),
+  features: row.features || {},
+  createdAt: Number(row.created_at),
+  updatedAt: Number(row.updated_at),
+});
+
+const buildSubscription = (row) => ({
+  id: Number(row.id),
+  userId: Number(row.user_id),
+  planId: Number(row.plan_id),
+  status: normalizeSubscriptionStatus(row.status),
+  currentPeriodStart: row.current_period_start === null ? null : Number(row.current_period_start),
+  currentPeriodEnd: row.current_period_end === null ? null : Number(row.current_period_end),
+  cancelledAt: row.cancelled_at === null ? null : Number(row.cancelled_at),
+  gateway: row.gateway || null,
+  gatewayCustomerId: row.gateway_customer_id || null,
+  gatewaySubscriptionId: row.gateway_subscription_id || null,
+  metadata: row.metadata || {},
+  createdAt: Number(row.created_at),
+  updatedAt: Number(row.updated_at),
+  userEmail: row.user_email || null,
+  userName: row.user_name || null,
+  planCode: row.plan_code || null,
+  planName: row.plan_name || null,
+  planPriceCents: row.plan_price_cents === null || row.plan_price_cents === undefined
+    ? null
+    : Number(row.plan_price_cents),
+  planCurrency: row.plan_currency || null,
+  planBillingInterval: row.plan_billing_interval
+    ? normalizeBillingInterval(row.plan_billing_interval)
+    : null,
+});
+
 const writeAccessLog = async (
   client,
   { userId, actorUserId, event, previousStatus, newStatus, reason = null, metadata = {} },
@@ -105,14 +175,176 @@ const writeAccessLog = async (
   );
 };
 
+const syncUserAccessFromSubscription = async (
+  client,
+  { userRow, subscriptionRow, actorUserId, reason = null },
+) => {
+  const now = Date.now();
+  const subscriptionStatus = normalizeSubscriptionStatus(subscriptionRow.status);
+  const nextStatus = subscriptionStatusToAccessStatus(subscriptionStatus);
+  const nextMode = subscriptionStatusToAccessMode(subscriptionStatus);
+  const previousStatus = normalizeAccessStatus(userRow.access_status);
+  const periodEnd =
+    subscriptionRow.current_period_end === null ? null : Number(subscriptionRow.current_period_end);
+  const accessAllowed = isSubscriptionAccessAllowed(subscriptionStatus);
+  const trialEndsAt = nextStatus === ACCESS_STATUS.TRIAL ? periodEnd : null;
+  const accessExpiresAt = nextStatus === ACCESS_STATUS.ACTIVE ? periodEnd : null;
+  const approvedAt = accessAllowed ? userRow.approved_at || now : userRow.approved_at;
+  const cancelledAt = nextStatus === ACCESS_STATUS.CANCELLED ? userRow.cancelled_at || now : null;
+
+  const updateResult = await client.query(
+    `UPDATE users
+     SET access_status = $2,
+         access_mode = $3,
+         trial_ends_at = $4,
+         access_expires_at = $5,
+         approved_at = $6,
+         approved_by = $7,
+         suspended_at = NULL,
+         suspension_reason = NULL,
+         cancelled_at = $8,
+         updated_at = $9
+     WHERE id = $1
+     RETURNING ${USER_ACCESS_SELECT_FIELDS}, created_at, updated_at, last_login_at`,
+    [
+      userRow.id,
+      nextStatus,
+      nextMode,
+      trialEndsAt,
+      accessExpiresAt,
+      approvedAt,
+      actorUserId,
+      cancelledAt,
+      now,
+    ],
+  );
+
+  if (!accessAllowed) {
+    await client.query(
+      `UPDATE sessions
+       SET revoked_at = $2
+       WHERE user_id = $1
+         AND revoked_at IS NULL`,
+      [userRow.id, now],
+    );
+  }
+
+  await writeAccessLog(client, {
+    userId: userRow.id,
+    actorUserId,
+    event: 'SUBSCRIPTION_STATUS_SYNCED',
+    previousStatus,
+    newStatus: nextStatus,
+    reason,
+    metadata: {
+      subscriptionId: Number(subscriptionRow.id),
+      planId: Number(subscriptionRow.plan_id),
+      subscriptionStatus,
+      currentPeriodEnd: periodEnd,
+    },
+  });
+
+  return updateResult.rows[0];
+};
+
 router.get('/settings', (_req, res) => {
   return res.json({
     defaultTrialDays: DEFAULT_TRIAL_DAYS,
     trialDayOptions: TRIAL_DAY_OPTIONS,
     defaultInviteExpiresDays: DEFAULT_INVITE_EXPIRES_DAYS,
+    defaultSubscriptionPeriodDays: DEFAULT_SUBSCRIPTION_PERIOD_DAYS,
+    subscriptionPeriodOptions: SUBSCRIPTION_PERIOD_OPTIONS,
     registrationAccessStatus: REGISTRATION_ACCESS_STATUS,
     registrationAccessMode: REGISTRATION_ACCESS_MODE,
   });
+});
+
+router.get('/plans', async (_req, res, next) => {
+  try {
+    const result = await pool.query(
+      `SELECT *
+       FROM plans
+       ORDER BY is_active DESC, created_at DESC`,
+    );
+
+    return res.json(result.rows.map(buildPlan));
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.post('/plans', async (req, res, next) => {
+  const name = String(req.body?.name || '').trim();
+  const code = normalizePlanCode(req.body?.code || name);
+  const description = String(req.body?.description || '').trim() || null;
+  const priceCents = toNonNegativeCents(req.body?.priceCents);
+  const currency = String(req.body?.currency || 'BRL').trim().toUpperCase().slice(0, 3) || 'BRL';
+  const billingInterval = normalizeBillingInterval(req.body?.billingInterval);
+
+  if (!name || !code) {
+    return res.status(400).json({ error: 'Nome e codigo do plano sao obrigatorios.' });
+  }
+
+  if (priceCents === null) {
+    return res.status(400).json({ error: 'Valor do plano invalido.' });
+  }
+
+  if (!billingIntervals.has(billingInterval)) {
+    return res.status(400).json({ error: 'Intervalo de cobranca invalido.' });
+  }
+
+  try {
+    const now = Date.now();
+    const result = await pool.query(
+      `INSERT INTO plans (
+         code,
+         name,
+         description,
+         price_cents,
+         currency,
+         billing_interval,
+         is_active,
+         features,
+         created_at,
+         updated_at
+       )
+       VALUES ($1, $2, $3, $4, $5, $6, TRUE, '{}'::jsonb, $7, $7)
+       RETURNING *`,
+      [code, name, description, priceCents, currency, billingInterval, now],
+    );
+
+    return res.status(201).json(buildPlan(result.rows[0]));
+  } catch (error) {
+    if (error?.code === '23505') {
+      return res.status(409).json({ error: 'Ja existe um plano com este codigo.' });
+    }
+    return next(error);
+  }
+});
+
+router.get('/subscriptions', async (_req, res, next) => {
+  try {
+    const result = await pool.query(
+      `SELECT
+         s.*,
+         u.email AS user_email,
+         u.name AS user_name,
+         p.code AS plan_code,
+         p.name AS plan_name,
+         p.price_cents AS plan_price_cents,
+         p.currency AS plan_currency,
+         p.billing_interval AS plan_billing_interval
+       FROM subscriptions s
+       JOIN users u ON u.id = s.user_id
+       JOIN plans p ON p.id = s.plan_id
+       ORDER BY s.created_at DESC
+       LIMIT 100`,
+    );
+
+    return res.json(result.rows.map(buildSubscription));
+  } catch (error) {
+    return next(error);
+  }
 });
 
 router.get('/invites', async (_req, res, next) => {
@@ -391,6 +623,264 @@ router.patch('/users/:userId/access', async (req, res, next) => {
 
     await client.query('COMMIT');
     return res.json(buildAdminUser(updateResult.rows[0]));
+  } catch (error) {
+    await client.query('ROLLBACK');
+    return next(error);
+  } finally {
+    client.release();
+  }
+});
+
+router.post('/users/:userId/subscription', async (req, res, next) => {
+  const userId = Number(req.params.userId);
+  if (!Number.isInteger(userId) || userId <= 0) {
+    return res.status(400).json({ error: 'Usuario invalido' });
+  }
+
+  const planId = Number(req.body?.planId);
+  if (!Number.isInteger(planId) || planId <= 0) {
+    return res.status(400).json({ error: 'Plano invalido' });
+  }
+
+  const status = normalizeSubscriptionStatus(req.body?.status, SUBSCRIPTION_STATUS.ACTIVE);
+  if (!subscriptionStatuses.has(status)) {
+    return res.status(400).json({ error: 'Status de assinatura invalido.' });
+  }
+
+  const periodDays = toPositiveDays(req.body?.periodDays, DEFAULT_SUBSCRIPTION_PERIOD_DAYS);
+  const now = Date.now();
+  const client = await pool.connect();
+
+  try {
+    await client.query('BEGIN');
+
+    const userResult = await client.query(
+      `SELECT ${USER_ACCESS_SELECT_FIELDS}
+       FROM users
+       WHERE id = $1
+       LIMIT 1
+       FOR UPDATE`,
+      [userId],
+    );
+
+    if (!userResult.rowCount) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Usuario nao encontrado' });
+    }
+
+    const planResult = await client.query(
+      `SELECT *
+       FROM plans
+       WHERE id = $1
+         AND is_active = TRUE
+       LIMIT 1`,
+      [planId],
+    );
+
+    if (!planResult.rowCount) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Plano ativo nao encontrado.' });
+    }
+
+    const plan = planResult.rows[0];
+    const billingInterval = normalizeBillingInterval(plan.billing_interval);
+    const renewsAccess = [SUBSCRIPTION_STATUS.ACTIVE, SUBSCRIPTION_STATUS.TRIALING].includes(status);
+    const currentPeriodEnd =
+      !renewsAccess
+        ? null
+        : billingInterval === BILLING_INTERVAL.LIFETIME && status === SUBSCRIPTION_STATUS.ACTIVE
+        ? null
+        : now + periodDays * 24 * 60 * 60 * 1000;
+    const cancelledAt = status === SUBSCRIPTION_STATUS.CANCELLED ? now : null;
+
+    if (
+      renewsAccess &&
+      currentPeriodEnd !== null &&
+      currentPeriodEnd <= now
+    ) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: 'A assinatura precisa terminar no futuro.' });
+    }
+
+    const subscriptionResult = await client.query(
+      `INSERT INTO subscriptions (
+         user_id,
+         plan_id,
+         status,
+         current_period_start,
+         current_period_end,
+         cancelled_at,
+         gateway,
+         gateway_customer_id,
+         gateway_subscription_id,
+         metadata,
+         created_at,
+         updated_at
+       )
+       VALUES ($1, $2, $3, $4, $5, $6, 'manual', NULL, NULL, $7::jsonb, $4, $4)
+       RETURNING *`,
+      [
+        userId,
+        planId,
+        status,
+        now,
+        currentPeriodEnd,
+        cancelledAt,
+        JSON.stringify({
+          source: 'admin_manual',
+          periodDays,
+        }),
+      ],
+    );
+
+    await syncUserAccessFromSubscription(client, {
+      userRow: userResult.rows[0],
+      subscriptionRow: subscriptionResult.rows[0],
+      actorUserId: req.user.id,
+      reason: `Assinatura ${status.toLowerCase()} criada manualmente`,
+    });
+
+    const responseResult = await client.query(
+      `SELECT
+         s.*,
+         u.email AS user_email,
+         u.name AS user_name,
+         p.code AS plan_code,
+         p.name AS plan_name,
+         p.price_cents AS plan_price_cents,
+         p.currency AS plan_currency,
+         p.billing_interval AS plan_billing_interval
+       FROM subscriptions s
+       JOIN users u ON u.id = s.user_id
+       JOIN plans p ON p.id = s.plan_id
+       WHERE s.id = $1
+       LIMIT 1`,
+      [subscriptionResult.rows[0].id],
+    );
+
+    await client.query('COMMIT');
+    return res.status(201).json(buildSubscription(responseResult.rows[0]));
+  } catch (error) {
+    await client.query('ROLLBACK');
+    return next(error);
+  } finally {
+    client.release();
+  }
+});
+
+router.patch('/subscriptions/:subscriptionId', async (req, res, next) => {
+  const subscriptionId = Number(req.params.subscriptionId);
+  if (!Number.isInteger(subscriptionId) || subscriptionId <= 0) {
+    return res.status(400).json({ error: 'Assinatura invalida' });
+  }
+
+  const status = normalizeSubscriptionStatus(req.body?.status, '');
+  if (!subscriptionStatuses.has(status)) {
+    return res.status(400).json({ error: 'Status de assinatura invalido.' });
+  }
+
+  const periodDays = toPositiveDays(req.body?.periodDays, DEFAULT_SUBSCRIPTION_PERIOD_DAYS);
+  const now = Date.now();
+  const client = await pool.connect();
+
+  try {
+    await client.query('BEGIN');
+
+    const currentSubscriptionResult = await client.query(
+      `SELECT s.*, p.billing_interval
+       FROM subscriptions s
+       JOIN plans p ON p.id = s.plan_id
+       WHERE s.id = $1
+       LIMIT 1
+       FOR UPDATE`,
+      [subscriptionId],
+    );
+
+    if (!currentSubscriptionResult.rowCount) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Assinatura nao encontrada.' });
+    }
+
+    const currentSubscription = currentSubscriptionResult.rows[0];
+    const userResult = await client.query(
+      `SELECT ${USER_ACCESS_SELECT_FIELDS}
+       FROM users
+       WHERE id = $1
+       LIMIT 1
+       FOR UPDATE`,
+      [currentSubscription.user_id],
+    );
+
+    if (!userResult.rowCount) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Usuario da assinatura nao encontrado.' });
+    }
+
+    const billingInterval = normalizeBillingInterval(currentSubscription.billing_interval);
+    const renewsAccess = [SUBSCRIPTION_STATUS.ACTIVE, SUBSCRIPTION_STATUS.TRIALING].includes(status);
+    const currentPeriodEnd =
+      !renewsAccess
+        ? currentSubscription.current_period_end
+        : billingInterval === BILLING_INTERVAL.LIFETIME && status === SUBSCRIPTION_STATUS.ACTIVE
+          ? null
+          : now + periodDays * 24 * 60 * 60 * 1000;
+    const currentPeriodStart = renewsAccess ? now : currentSubscription.current_period_start;
+    const cancelledAt = status === SUBSCRIPTION_STATUS.CANCELLED ? now : null;
+
+    const updateResult = await client.query(
+      `UPDATE subscriptions
+       SET status = $2,
+           current_period_start = $3,
+           current_period_end = $4,
+           cancelled_at = $5,
+           metadata = metadata || $6::jsonb,
+           updated_at = $7
+       WHERE id = $1
+       RETURNING *`,
+      [
+        subscriptionId,
+        status,
+        currentPeriodStart,
+        currentPeriodEnd,
+        cancelledAt,
+        JSON.stringify({
+          lastAdminUpdate: {
+            actorUserId: req.user.id,
+            periodDays: renewsAccess ? periodDays : null,
+            at: now,
+          },
+        }),
+        now,
+      ],
+    );
+
+    await syncUserAccessFromSubscription(client, {
+      userRow: userResult.rows[0],
+      subscriptionRow: updateResult.rows[0],
+      actorUserId: req.user.id,
+      reason: `Assinatura alterada para ${status.toLowerCase()}`,
+    });
+
+    const responseResult = await client.query(
+      `SELECT
+         s.*,
+         u.email AS user_email,
+         u.name AS user_name,
+         p.code AS plan_code,
+         p.name AS plan_name,
+         p.price_cents AS plan_price_cents,
+         p.currency AS plan_currency,
+         p.billing_interval AS plan_billing_interval
+       FROM subscriptions s
+       JOIN users u ON u.id = s.user_id
+       JOIN plans p ON p.id = s.plan_id
+       WHERE s.id = $1
+       LIMIT 1`,
+      [subscriptionId],
+    );
+
+    await client.query('COMMIT');
+    return res.json(buildSubscription(responseResult.rows[0]));
   } catch (error) {
     await client.query('ROLLBACK');
     return next(error);
