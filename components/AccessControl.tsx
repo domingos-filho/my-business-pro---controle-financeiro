@@ -31,6 +31,51 @@ const STATUS_STYLES: Record<string, string> = {
   PAST_DUE: 'bg-orange-100 text-orange-700',
 };
 
+const ACCESS_STATUS_LABELS: Record<string, string> = {
+  ACTIVE: 'Ativa',
+  PENDING: 'Pendente',
+  TRIAL: 'Em teste',
+  TRIALING: 'Em teste comercial',
+  SUSPENDED: 'Suspensa',
+  CANCELLED: 'Cancelada',
+  EXPIRED: 'Expirada',
+  PAST_DUE: 'Inadimplente',
+};
+
+const ACCESS_MODE_LABELS: Record<string, string> = {
+  OPEN_REGISTRATION: 'Cadastro aberto',
+  MANUAL_APPROVAL: 'Aprovação manual',
+  INVITE: 'Convite',
+  INVITE_ONLY: 'Somente convite',
+  ADMIN_GRANTED: 'Liberado pelo administrador',
+};
+
+const BILLING_INTERVAL_LABELS: Record<string, string> = {
+  MONTH: 'Mensal',
+  YEAR: 'Anual',
+  LIFETIME: 'Vitalício',
+};
+
+const formatStatusLabel = (value?: string | null) => {
+  if (!value) return 'Não informado';
+  return ACCESS_STATUS_LABELS[value] || value;
+};
+
+const formatAccessModeLabel = (value?: string | null) => {
+  if (!value) return 'Não informado';
+  return ACCESS_MODE_LABELS[value] || value;
+};
+
+const formatBillingIntervalLabel = (value?: string | null) => {
+  if (!value) return 'Não informado';
+  return BILLING_INTERVAL_LABELS[value] || value;
+};
+
+const formatGatewayLabel = (value?: string | null) => {
+  if (!value) return 'Manual';
+  return value === 'manual' ? 'Manual' : value;
+};
+
 const formatDate = (value: number | null) =>
   value
     ? new Date(value).toLocaleString('pt-BR', {
@@ -129,7 +174,7 @@ export const AccessControl: React.FC = () => {
       setSubscriptionUserId((current) => current || (userResponse.items[0] ? String(userResponse.items[0].id) : ''));
       setSubscriptionPlanId((current) => current || (planResponse[0] ? String(planResponse[0].id) : ''));
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : 'NÃ£o foi possÃ­vel carregar o controle de acesso.');
+      setError(requestError instanceof Error ? requestError.message : 'Não foi possível carregar o controle de acesso.');
     } finally {
       setLoading(false);
     }
@@ -144,7 +189,7 @@ export const AccessControl: React.FC = () => {
       { label: 'Total de contas', value: summary.total, icon: UsersIcon, tone: 'bg-slate-100 text-slate-700' },
       { label: 'Pendentes', value: summary.byStatus.PENDING || 0, icon: ClockIcon, tone: 'bg-amber-100 text-amber-700' },
       { label: 'Ativas', value: summary.byStatus.ACTIVE || 0, icon: CheckCircleIcon, tone: 'bg-emerald-100 text-emerald-700' },
-      { label: 'Em trial', value: summary.byStatus.TRIAL || 0, icon: ClockIcon, tone: 'bg-indigo-100 text-indigo-700' },
+      { label: 'Em teste', value: summary.byStatus.TRIAL || 0, icon: ClockIcon, tone: 'bg-indigo-100 text-indigo-700' },
       { label: 'Suspensas', value: summary.byStatus.SUSPENDED || 0, icon: ShieldIcon, tone: 'bg-rose-100 text-rose-700' },
     ],
     [summary],
@@ -153,7 +198,7 @@ export const AccessControl: React.FC = () => {
   const handleUpdateStatus = async (user: AccessUser, accessStatus: AccessStatus) => {
     const reason =
       accessStatus === 'SUSPENDED' || accessStatus === 'CANCELLED'
-        ? window.prompt('Informe o motivo desta alteraÃ§Ã£o (opcional):', '') || undefined
+        ? window.prompt('Informe o motivo desta alteração (opcional):', '') || undefined
         : undefined;
 
     try {
@@ -163,7 +208,7 @@ export const AccessControl: React.FC = () => {
       });
       await load();
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : 'NÃ£o foi possÃ­vel alterar o acesso da conta.');
+      setError(requestError instanceof Error ? requestError.message : 'Não foi possível alterar o acesso da conta.');
     }
   };
 
@@ -172,11 +217,11 @@ export const AccessControl: React.FC = () => {
       await AdminAccessService.updateUserAccess(user.id, {
         accessStatus: 'TRIAL',
         trialDays,
-        reason: `Trial de ${trialDays} dias`,
+        reason: `Período de teste de ${trialDays} dias`,
       });
       await load();
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : 'NÃ£o foi possÃ­vel iniciar o trial da conta.');
+      setError(requestError instanceof Error ? requestError.message : 'Não foi possível iniciar o período de teste da conta.');
     }
   };
 
@@ -185,7 +230,7 @@ export const AccessControl: React.FC = () => {
     setError('');
     const normalizedInviteEmail = normalizeEmail(inviteEmail);
     if (!isValidEmail(normalizedInviteEmail)) {
-      setError('Informe um e-mail vÃ¡lido para o convite.');
+      setError('Informe um e-mail válido para o convite.');
       return;
     }
 
@@ -200,7 +245,7 @@ export const AccessControl: React.FC = () => {
       setInviteEmail('');
       await load();
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : 'NÃ£o foi possÃ­vel criar o convite.');
+      setError(requestError instanceof Error ? requestError.message : 'Não foi possível criar o convite.');
     }
   };
 
@@ -209,7 +254,7 @@ export const AccessControl: React.FC = () => {
       await AdminAccessService.revokeInvite(invite.id);
       await load();
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : 'NÃ£o foi possÃ­vel revogar o convite.');
+      setError(requestError instanceof Error ? requestError.message : 'Não foi possível revogar o convite.');
     }
   };
 
@@ -229,7 +274,7 @@ export const AccessControl: React.FC = () => {
 
     const normalizedPrice = parseNonNegativeFloat(planPrice, -1);
     if (!Number.isFinite(normalizedPrice) || normalizedPrice < 0) {
-      setError('Informe um valor vÃ¡lido para o plano.');
+      setError('Informe um valor válido para o plano.');
       return;
     }
 
@@ -247,7 +292,7 @@ export const AccessControl: React.FC = () => {
       setSubscriptionPlanId(String(plan.id));
       await load();
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : 'NÃ£o foi possÃ­vel criar o plano.');
+      setError(requestError instanceof Error ? requestError.message : 'Não foi possível criar o plano.');
     }
   };
 
@@ -259,7 +304,7 @@ export const AccessControl: React.FC = () => {
     const planId = parsePositiveInteger(subscriptionPlanId);
 
     if (!userId || !planId) {
-      setError('Selecione usuÃ¡rio e plano para criar a assinatura.');
+      setError('Selecione usuário e plano para criar a assinatura.');
       return;
     }
 
@@ -271,7 +316,7 @@ export const AccessControl: React.FC = () => {
       });
       await load();
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : 'NÃ£o foi possÃ­vel criar a assinatura.');
+      setError(requestError instanceof Error ? requestError.message : 'Não foi possível criar a assinatura.');
     }
   };
 
@@ -283,7 +328,7 @@ export const AccessControl: React.FC = () => {
       });
       await load();
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : 'NÃ£o foi possÃ­vel alterar a assinatura.');
+      setError(requestError instanceof Error ? requestError.message : 'Não foi possível alterar a assinatura.');
     }
   };
 
@@ -300,11 +345,11 @@ export const AccessControl: React.FC = () => {
         <div>
           <h2 className="text-3xl font-black text-slate-900 tracking-tight">Controle de Acesso</h2>
           <p className="text-sm font-medium text-slate-500">
-            Aprove, suspenda e acompanhe o status comercial das contas que usam a aplicaÃ§Ã£o.
+            Aprove, suspenda e acompanhe o status comercial das contas que usam a aplicação.
           </p>
           {settings && (
             <p className="mt-2 text-xs font-bold uppercase tracking-wider text-slate-400">
-              Cadastro novo: {settings.registrationAccessStatus} / {settings.registrationAccessMode}
+              Cadastro novo: {formatStatusLabel(settings.registrationAccessStatus)} / {formatAccessModeLabel(settings.registrationAccessMode)}
             </p>
           )}
         </div>
@@ -374,7 +419,7 @@ export const AccessControl: React.FC = () => {
               <option value="">Todos</option>
               <option value="PENDING">Pendentes</option>
               <option value="ACTIVE">Ativas</option>
-              <option value="TRIAL">Trial</option>
+              <option value="TRIAL">Em teste</option>
               <option value="SUSPENDED">Suspensas</option>
               <option value="CANCELLED">Canceladas</option>
               <option value="EXPIRED">Expiradas</option>
@@ -383,7 +428,7 @@ export const AccessControl: React.FC = () => {
 
           <div>
             <label className="ml-1 mb-2 block text-[11px] font-black uppercase tracking-widest text-slate-400">
-              Dias de trial
+              Dias de teste
             </label>
             <select
               value={trialDays}
@@ -393,7 +438,7 @@ export const AccessControl: React.FC = () => {
               {(settings?.trialDayOptions || [7, 14, 30]).map((option) => (
                 <option key={option} value={option}>
                   {option} dias
-                  {settings?.defaultTrialDays === option ? ' (padrÃ£o)' : ''}
+                  {settings?.defaultTrialDays === option ? ' (padrão)' : ''}
                 </option>
               ))}
             </select>
@@ -423,16 +468,16 @@ export const AccessControl: React.FC = () => {
                   <div className="flex flex-wrap items-center gap-2">
                     <h3 className="text-lg font-black text-slate-950">{user.name}</h3>
                     <span className={`rounded-full px-3 py-1 text-[11px] font-black uppercase tracking-wider ${STATUS_STYLES[user.accessStatus] || 'bg-slate-100 text-slate-700'}`}>
-                      {user.accessStatus}
+                      {formatStatusLabel(user.accessStatus)}
                     </span>
                     {user.isAdmin && (
                       <span className="rounded-full bg-indigo-100 px-3 py-1 text-[11px] font-black uppercase tracking-wider text-indigo-700">
-                        Admin
+                        Administrador
                       </span>
                     )}
                     {user.accessStatus === 'TRIAL' && !user.effectiveAccessAllowed && (
                       <span className="rounded-full bg-rose-100 px-3 py-1 text-[11px] font-black uppercase tracking-wider text-rose-700">
-                        Trial expirado
+                        Teste expirado
                       </span>
                     )}
                   </div>
@@ -444,22 +489,22 @@ export const AccessControl: React.FC = () => {
                     </div>
                     <div>
                       <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Modo</p>
-                      <p className="mt-1 text-sm font-medium text-slate-700">{user.accessMode}</p>
+                      <p className="mt-1 text-sm font-medium text-slate-700">{formatAccessModeLabel(user.accessMode)}</p>
                     </div>
                     <div>
                       <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Criada em</p>
                       <p className="mt-1 text-sm font-medium text-slate-700">{formatDate(user.createdAt)}</p>
                     </div>
                     <div>
-                      <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Ãšltimo login</p>
+                      <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Último login</p>
                       <p className="mt-1 text-sm font-medium text-slate-700">{formatDate(user.lastLoginAt)}</p>
                     </div>
                     <div>
-                      <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Trial</p>
+                      <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Teste</p>
                       <p className="mt-1 text-sm font-medium text-slate-700">
                         {user.accessStatus === 'TRIAL'
                           ? `${formatTrialStatus(user.trialEndsAt)} - ${formatDate(user.trialEndsAt)}`
-                          : 'NÃ£o aplicado'}
+                          : 'Não aplicado'}
                       </p>
                     </div>
                   </div>
@@ -490,7 +535,7 @@ export const AccessControl: React.FC = () => {
                       onClick={() => handleStartTrial(user)}
                       className="rounded-2xl bg-indigo-600 px-4 py-3 text-sm font-black text-white transition-all hover:bg-indigo-700 active:scale-95"
                     >
-                      Iniciar trial
+                      Iniciar teste
                     </button>
                   )}
                   {user.accessStatus === 'TRIAL' && (
@@ -499,7 +544,7 @@ export const AccessControl: React.FC = () => {
                       onClick={() => handleStartTrial(user)}
                       className="rounded-2xl border border-indigo-200 bg-white px-4 py-3 text-sm font-black text-indigo-700 transition-all hover:border-indigo-300 hover:bg-indigo-50 active:scale-95"
                     >
-                      Renovar trial
+                      Renovar teste
                     </button>
                   )}
                   {user.accessStatus !== 'PENDING' && (
@@ -534,7 +579,7 @@ export const AccessControl: React.FC = () => {
             <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Assinaturas</p>
             <h3 className="mt-2 text-xl font-black text-slate-950">Controle comercial recorrente</h3>
             <p className="mt-1 text-sm font-medium text-slate-500">
-              Use esta base manual atÃ© conectar um gateway de pagamento. Status inadimplente, cancelado ou expirado bloqueia o acesso.
+              Use esta base manual até conectar um gateway de pagamento. Status inadimplente, cancelado ou expirado bloqueia o acesso.
             </p>
           </div>
           <p className="text-xs font-bold uppercase tracking-wider text-slate-400">
@@ -566,7 +611,7 @@ export const AccessControl: React.FC = () => {
 
               <div>
                 <label className="ml-1 mb-2 block text-[11px] font-black uppercase tracking-widest text-slate-400">
-                  CÃ³digo
+                  Código
                 </label>
                 <input
                   type="text"
@@ -616,7 +661,7 @@ export const AccessControl: React.FC = () => {
                 >
                   <option value="MONTH">Mensal</option>
                   <option value="YEAR">Anual</option>
-                  <option value="LIFETIME">VitalÃ­cio</option>
+                  <option value="LIFETIME">Vitalício</option>
                 </select>
               </div>
             </div>
@@ -634,7 +679,7 @@ export const AccessControl: React.FC = () => {
                   <div className="min-w-0">
                     <p className="text-sm font-black text-slate-950 truncate">{plan.name}</p>
                     <p className="text-xs font-bold text-slate-400">
-                      {plan.code} - {formatMoney(plan.priceCents, plan.currency)} / {plan.billingInterval}
+                      {plan.code} - {formatMoney(plan.priceCents, plan.currency)} / {formatBillingIntervalLabel(plan.billingInterval)}
                     </p>
                   </div>
                   <span className={`rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-wider ${plan.isActive ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-700'}`}>
@@ -700,14 +745,14 @@ export const AccessControl: React.FC = () => {
                   className="w-full rounded-2xl border border-slate-200 bg-white p-3.5 text-slate-900 font-medium outline-none focus:ring-2 focus:ring-indigo-500"
                 >
                   <option value="ACTIVE">Ativa</option>
-                  <option value="TRIALING">Trial comercial</option>
+                  <option value="TRIALING">Em teste comercial</option>
                   <option value="PAST_DUE">Inadimplente</option>
                 </select>
               </div>
 
               <div>
                 <label className="ml-1 mb-2 block text-[11px] font-black uppercase tracking-widest text-slate-400">
-                  PerÃ­odo
+                  Período
                 </label>
                 <select
                   value={subscriptionPeriodDays}
@@ -719,7 +764,7 @@ export const AccessControl: React.FC = () => {
                   {(settings?.subscriptionPeriodOptions || [30, 90, 365]).map((option) => (
                     <option key={option} value={option}>
                       {option} dias
-                      {settings?.defaultSubscriptionPeriodDays === option ? ' (padrÃ£o)' : ''}
+                      {settings?.defaultSubscriptionPeriodDays === option ? ' (padrão)' : ''}
                     </option>
                   ))}
                 </select>
@@ -744,19 +789,19 @@ export const AccessControl: React.FC = () => {
                   <div className="flex flex-wrap items-center gap-2">
                     <p className="font-black text-slate-950 break-all">{subscription.userName || subscription.userEmail}</p>
                     <span className={`rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-wider ${STATUS_STYLES[subscription.status] || 'bg-slate-100 text-slate-700'}`}>
-                      {subscription.status}
+                      {formatStatusLabel(subscription.status)}
                     </span>
                     <span className="rounded-full bg-slate-200 px-3 py-1 text-[10px] font-black uppercase tracking-wider text-slate-700">
-                      {subscription.gateway || 'manual'}
+                      {formatGatewayLabel(subscription.gateway)}
                     </span>
                   </div>
                   <p className="mt-2 text-sm font-medium text-slate-500">
                     {subscription.planName || 'Plano'} - {formatMoney(subscription.planPriceCents, subscription.planCurrency || 'BRL')}
-                    {' | '}PerÃ­odo atÃ©{' '}
+                    {' | '}Período até{' '}
                     {subscription.currentPeriodEnd
                       ? formatDate(subscription.currentPeriodEnd)
                       : subscription.planBillingInterval === 'LIFETIME'
-                        ? 'VitalÃ­cio'
+                        ? 'Vitalício'
                         : 'Sem data'}
                   </p>
                   <p className="mt-1 text-xs font-bold text-slate-400 break-all">
@@ -836,7 +881,7 @@ export const AccessControl: React.FC = () => {
               onChange={(event) => setInviteAccessStatus(event.target.value as AccessStatus)}
               className="w-full rounded-2xl border border-slate-200 bg-slate-50 p-3.5 text-slate-900 font-medium outline-none focus:ring-2 focus:ring-indigo-500"
             >
-              <option value="TRIAL">Trial</option>
+              <option value="TRIAL">Em teste</option>
               <option value="ACTIVE">Ativo</option>
               <option value="PENDING">Pendente</option>
             </select>
@@ -844,7 +889,7 @@ export const AccessControl: React.FC = () => {
 
           <div>
             <label className="ml-1 mb-2 block text-[11px] font-black uppercase tracking-widest text-slate-400">
-              Dias de trial
+              Dias de teste
             </label>
             <select
               value={trialDays}
@@ -855,7 +900,7 @@ export const AccessControl: React.FC = () => {
               {(settings?.trialDayOptions || [7, 14, 30]).map((option) => (
                 <option key={option} value={option}>
                   {option} dias
-                  {settings?.defaultTrialDays === option ? ' (padrÃ£o)' : ''}
+                  {settings?.defaultTrialDays === option ? ' (padrão)' : ''}
                 </option>
               ))}
             </select>
@@ -875,7 +920,7 @@ export const AccessControl: React.FC = () => {
               {[3, 7, 14, 30].map((option) => (
                 <option key={option} value={option}>
                   {option} dias
-                  {settings?.defaultInviteExpiresDays === option ? ' (padrÃ£o)' : ''}
+                  {settings?.defaultInviteExpiresDays === option ? ' (padrão)' : ''}
                 </option>
               ))}
             </select>
@@ -919,7 +964,7 @@ export const AccessControl: React.FC = () => {
                   <div className="flex flex-wrap items-center gap-2">
                     <p className="font-black text-slate-950 break-all">{invite.email}</p>
                     <span className={`rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-wider ${STATUS_STYLES[invite.accessStatus] || 'bg-slate-100 text-slate-700'}`}>
-                      {invite.accessStatus}
+                      {formatStatusLabel(invite.accessStatus)}
                     </span>
                     <span className="rounded-full bg-slate-200 px-3 py-1 text-[10px] font-black uppercase tracking-wider text-slate-700">
                       {getInviteStateLabel(invite)}
@@ -927,7 +972,7 @@ export const AccessControl: React.FC = () => {
                   </div>
                   <p className="mt-2 text-sm font-medium text-slate-500">
                     Expira em {formatDate(invite.expiresAt)}
-                    {invite.trialDays ? ` - trial de ${invite.trialDays} dias` : ''}
+                    {invite.trialDays ? ` - teste de ${invite.trialDays} dias` : ''}
                     {invite.usedByEmail ? ` - usado por ${invite.usedByEmail}` : ''}
                   </p>
                 </div>
@@ -956,7 +1001,7 @@ export const AccessControl: React.FC = () => {
       <section className="rounded-[2rem] border border-slate-100 bg-white p-6 shadow-sm space-y-4">
         <div>
           <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Auditoria</p>
-          <h3 className="mt-2 text-xl font-black text-slate-950">Ãšltimas alteraÃ§Ãµes de acesso</h3>
+          <h3 className="mt-2 text-xl font-black text-slate-950">Últimas alterações de acesso</h3>
         </div>
 
         <div className="rounded-[1.75rem] border border-slate-100 bg-slate-50/40 p-3">
@@ -975,7 +1020,7 @@ export const AccessControl: React.FC = () => {
                       {entry.userName} ({entry.userEmail})
                     </p>
                     <p className="mt-1 text-sm font-medium text-slate-500">
-                      {entry.previousStatus || 'N/A'} {'->'} {entry.newStatus || 'N/A'}
+                      {formatStatusLabel(entry.previousStatus)} {'→'} {formatStatusLabel(entry.newStatus)}
                       {entry.reason ? ` • ${entry.reason}` : ''}
                     </p>
                   </div>
