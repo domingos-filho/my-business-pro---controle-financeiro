@@ -65,6 +65,15 @@ const DEFAULT_TRIAL_DAYS = toPositiveInt(
   process.env.DEFAULT_TRIAL_DAYS || process.env.REGISTRATION_TRIAL_DAYS,
   14,
 );
+const TRIAL_DAY_OPTIONS = Array.from(
+  new Set(
+    String(process.env.TRIAL_DAY_OPTIONS || '7,14,30')
+      .split(',')
+      .map((value) => toPositiveInt(value, null))
+      .filter(Boolean)
+      .concat(DEFAULT_TRIAL_DAYS),
+  ),
+).sort((a, b) => a - b);
 const ADMIN_EMAILS = new Set(
   String(process.env.ADMIN_EMAILS || '')
     .split(',')
@@ -212,6 +221,7 @@ export {
   REGISTRATION_ACCESS_STATUS,
   REGISTRATION_TRIAL_DAYS,
   DEFAULT_TRIAL_DAYS,
+  TRIAL_DAY_OPTIONS,
   ADMIN_EMAILS,
   USER_ACCESS_SELECT_FIELDS,
   evaluateAccess,

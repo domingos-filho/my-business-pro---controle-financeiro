@@ -3,6 +3,9 @@ import {
   ACCESS_MODE,
   ACCESS_STATUS,
   DEFAULT_TRIAL_DAYS,
+  REGISTRATION_ACCESS_MODE,
+  REGISTRATION_ACCESS_STATUS,
+  TRIAL_DAY_OPTIONS,
   USER_ACCESS_SELECT_FIELDS,
   evaluateAccess,
   normalizeAccessMode,
@@ -71,6 +74,15 @@ const writeAccessLog = async (
     [userId, actorUserId, event, previousStatus, newStatus, reason, JSON.stringify(metadata || {}), Date.now()],
   );
 };
+
+router.get('/settings', (_req, res) => {
+  return res.json({
+    defaultTrialDays: DEFAULT_TRIAL_DAYS,
+    trialDayOptions: TRIAL_DAY_OPTIONS,
+    registrationAccessStatus: REGISTRATION_ACCESS_STATUS,
+    registrationAccessMode: REGISTRATION_ACCESS_MODE,
+  });
+});
 
 router.get('/users', async (req, res, next) => {
   try {

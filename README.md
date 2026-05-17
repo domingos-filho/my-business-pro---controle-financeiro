@@ -39,6 +39,7 @@ Copie `.env.example` para `.env` (Docker) ou configure no EasyPanel:
 - `REGISTRATION_ACCESS_MODE`: modo comercial inicial do cadastro (`MANUAL_APPROVAL`, `OPEN_REGISTRATION`, etc.)
 - `REGISTRATION_TRIAL_DAYS`: duracao padrao do trial quando `REGISTRATION_ACCESS_STATUS=TRIAL`
 - `DEFAULT_TRIAL_DAYS`: duracao padrao aplicada pelo painel admin ao iniciar/renovar trial
+- `TRIAL_DAY_OPTIONS`: opcoes exibidas no painel admin para iniciar/renovar trial, separadas por virgula
 - `ALLOW_LEGACY_DATA_CLAIM`: habilita endpoint explicito para reivindicar dados legados sem `user_id`
 - `APP_PORT`: porta publicada do frontend web no host (default `40`)
 - `API_PORT`: porta publicada da API no host (default `4000`)
@@ -155,6 +156,8 @@ Recomendacao operacional:
 2. mantenha `REGISTRATION_ACCESS_STATUS=PENDING`
 3. aprove manualmente novas contas no painel admin
 4. use trial para liberar teste por 7, 14 ou 30 dias antes de ativar definitivamente
+
+Com `REGISTRATION_ACCESS_STATUS=PENDING`, novos usuarios nao entram em trial automaticamente. Para cadastro ja nascer em teste, use `REGISTRATION_ACCESS_STATUS=TRIAL` e ajuste `REGISTRATION_TRIAL_DAYS`.
 
 ## Estrutura de deploy
 

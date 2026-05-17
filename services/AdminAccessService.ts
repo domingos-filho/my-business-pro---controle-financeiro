@@ -57,7 +57,18 @@ export interface AccessLogEntry {
   actorName: string | null;
 }
 
+export interface AccessSettings {
+  defaultTrialDays: number;
+  trialDayOptions: number[];
+  registrationAccessStatus: AccessStatus;
+  registrationAccessMode: string;
+}
+
 export const AdminAccessService = {
+  async getSettings() {
+    return ApiClient.request<AccessSettings>('/admin/settings');
+  },
+
   async listUsers(params?: { search?: string; status?: string }) {
     const query = new URLSearchParams();
     if (params?.search) query.set('search', params.search);

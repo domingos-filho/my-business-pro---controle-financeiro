@@ -1,5 +1,11 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { AdminAccessService, AccessLogEntry, AccessStatus, AccessUser } from '../services/AdminAccessService';
+import {
+  AccessLogEntry,
+  AccessSettings,
+  AccessStatus,
+  AccessUser,
+  AdminAccessService,
+} from '../services/AdminAccessService';
 import { CheckCircleIcon, ClockIcon, RefreshIcon, ShieldIcon, UsersIcon } from './AppIcons';
 
 const STATUS_STYLES: Record<string, string> = {
@@ -36,6 +42,7 @@ const formatTrialStatus = (value: number | null) => {
 export const AccessControl: React.FC = () => {
   const [users, setUsers] = useState<AccessUser[]>([]);
   const [logs, setLogs] = useState<AccessLogEntry[]>([]);
+  const [settings, setSettings] = useState<AccessSettings | null>(null);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [trialDays, setTrialDays] = useState(14);
@@ -51,7 +58,8 @@ export const AccessControl: React.FC = () => {
     setLoading(true);
     setError('');
     try {
-      const [userResponse, logResponse] = await Promise.all([
+      const [settingsResponse, userResponse, logResponse] = await Promise.all([
+        AdminAccessService.getSettings(),
         AdminAccessService.listUsers({
           search: search.trim() || undefined,
           status: statusFilter || undefined,
@@ -59,6 +67,13 @@ export const AccessControl: React.FC = () => {
         AdminAccessService.listLogs(),
       ]);
 
+      setSettings(settingsResponse);
+      setTrialDays((current) => {
+        if (!settings) return settingsResponse.defaultTrialDays;
+        return settingsResponse.trialDayOptions.includes(current)
+          ? current
+          : settingsResponse.defaultTrialDays;
+      });
       setUsers(userResponse.items);
       setSummary(userResponse.summary);
       setLogs(logResponse);
@@ -122,6 +137,11 @@ export const AccessControl: React.FC = () => {
           <p className="text-sm font-medium text-slate-500">
             Aprove, suspenda e acompanhe o status comercial das contas que usam a aplicacao.
           </p>
+          {settings && (
+            <p className="mt-2 text-xs font-bold uppercase tracking-wider text-slate-400">
+              Cadastro novo: {settings.registrationAccessStatus} / {settings.registrationAccessMode}
+            </p>
+          )}
         </div>
 
         <button
@@ -203,9 +223,12 @@ export const AccessControl: React.FC = () => {
               onChange={(event) => setTrialDays(Number(event.target.value))}
               className="w-full rounded-2xl border border-slate-200 bg-slate-50 p-3.5 text-slate-900 font-medium outline-none focus:ring-2 focus:ring-indigo-500"
             >
-              <option value={7}>7 dias</option>
-              <option value={14}>14 dias</option>
-              <option value={30}>30 dias</option>
+              {(settings?.trialDayOptions || [7, 14, 30]).map((option) => (
+                <option key={option} value={option}>
+                  {option} dias
+                  {settings?.defaultTrialDays === option ? ' (padrao)' : ''}
+                </option>
+              ))}
             </select>
           </div>
 
