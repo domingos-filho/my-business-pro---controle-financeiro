@@ -3,15 +3,21 @@ import express from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import {
+  ACCESS_MODE,
+  ACCESS_STATUS,
+  DEFAULT_TRIAL_DAYS,
   REGISTRATION_ACCESS_MODE,
   REGISTRATION_ACCESS_STATUS,
   USER_ACCESS_SELECT_FIELDS,
   evaluateAccess,
   getRegistrationAccessSeed,
+  normalizeAccessMode,
+  normalizeAccessStatus,
   toAccessDeniedPayload,
   toPublicAccessMetadata,
 } from '../access.js';
 import { pool } from '../db.js';
+import { hashInviteToken } from '../invites.js';
 import { requireAuth } from '../middleware/auth.js';
 import { createRateLimit } from '../middleware/rateLimit.js';
 
@@ -149,6 +155,73 @@ const buildPasswordValidationMessage = (password) => {
   const errors = getPasswordValidationErrors(password);
   if (!errors.length) return null;
   return `A senha precisa ${errors.join(', ')}.`;
+};
+
+const buildPublicInvite = (row) => ({
+  email: row.email,
+  accessStatus: normalizeAccessStatus(row.access_status),
+  accessMode: normalizeAccessMode(row.access_mode),
+  trialDays: row.trial_days === null ? null : Number(row.trial_days),
+  expiresAt: Number(row.expires_at),
+});
+
+const validateInvite = (invite, email = null, now = Date.now()) => {
+  if (!invite) {
+    return { status: 404, payload: { error: 'Convite nao encontrado' } };
+  }
+
+  if (invite.revoked_at !== null) {
+    return { status: 410, payload: { error: 'Convite revogado' } };
+  }
+
+  if (invite.used_at !== null) {
+    return { status: 410, payload: { error: 'Convite ja utilizado' } };
+  }
+
+  if (Number(invite.expires_at) <= now) {
+    return { status: 410, payload: { error: 'Convite expirado' } };
+  }
+
+  if (email && normalizeEmail(invite.email) !== email) {
+    return { status: 409, payload: { error: 'Este convite pertence a outro e-mail' } };
+  }
+
+  return null;
+};
+
+const getInviteByToken = async (client, token, { forUpdate = false } = {}) => {
+  const tokenHash = hashInviteToken(token);
+  const result = await client.query(
+    `SELECT *
+     FROM invites
+     WHERE token_hash = $1
+     LIMIT 1
+     ${forUpdate ? 'FOR UPDATE' : ''}`,
+    [tokenHash],
+  );
+
+  return result.rows[0] || null;
+};
+
+const getInviteAccessSeed = (invite, now = Date.now()) => {
+  const accessStatus = normalizeAccessStatus(invite.access_status, ACCESS_STATUS.PENDING);
+  const accessMode = normalizeAccessMode(invite.access_mode, ACCESS_MODE.INVITE);
+  const trialDays = Number(invite.trial_days || DEFAULT_TRIAL_DAYS);
+
+  return {
+    isAdmin: false,
+    accessStatus,
+    accessMode,
+    trialEndsAt:
+      accessStatus === ACCESS_STATUS.TRIAL
+        ? now + trialDays * 24 * 60 * 60 * 1000
+        : null,
+    accessExpiresAt: null,
+    approvedAt:
+      accessStatus === ACCESS_STATUS.ACTIVE || accessStatus === ACCESS_STATUS.TRIAL
+        ? now
+        : null,
+  };
 };
 
 const buildLockoutMessage = (lockedUntil) => {
@@ -364,6 +437,7 @@ router.post('/register', registerRateLimit, async (req, res, next) => {
   const email = normalizeEmail(req.body?.email);
   const name = normalizeName(req.body?.name);
   const password = String(req.body?.password || '');
+  const inviteToken = String(req.body?.inviteToken || '').trim();
 
   if (!name || name.length < 2 || !validEmail(email)) {
     return res.status(400).json({ error: 'Dados de cadastro invalidos' });
@@ -380,7 +454,18 @@ router.post('/register', registerRateLimit, async (req, res, next) => {
     await client.query('BEGIN');
 
     const now = Date.now();
-    const registrationAccess = getRegistrationAccessSeed(now);
+    const invite = inviteToken
+      ? await getInviteByToken(client, inviteToken, { forUpdate: true })
+      : null;
+    const inviteError = inviteToken ? validateInvite(invite, email, now) : null;
+    if (inviteError) {
+      await client.query('ROLLBACK');
+      return res.status(inviteError.status).json(inviteError.payload);
+    }
+
+    const registrationAccess = invite
+      ? getInviteAccessSeed(invite, now)
+      : getRegistrationAccessSeed(now, email);
     const passwordHash = await bcrypt.hash(password, 12);
     const avatar = buildDefaultAvatar(name);
     const created = await client.query(
@@ -407,6 +492,18 @@ router.post('/register', registerRateLimit, async (req, res, next) => {
     );
 
     const user = created.rows[0];
+
+    if (invite) {
+      await client.query(
+        `UPDATE invites
+         SET used_at = $2,
+             used_by = $3,
+             updated_at = $2
+         WHERE id = $1`,
+        [invite.id, now, user.id],
+      );
+    }
+
     const access = evaluateAccess(user, now);
 
     if (!access.allowed) {
@@ -416,6 +513,7 @@ router.post('/register', registerRateLimit, async (req, res, next) => {
         registrationCreated: true,
         registrationAccessStatus: REGISTRATION_ACCESS_STATUS,
         registrationAccessMode: REGISTRATION_ACCESS_MODE,
+        inviteApplied: Boolean(invite),
       });
     }
 
@@ -506,6 +604,29 @@ router.post('/login', loginRateLimit, async (req, res, next) => {
   }
 });
 
+router.get('/invites/:token', async (req, res, next) => {
+  const token = String(req.params.token || '').trim();
+  if (!token) {
+    return res.status(400).json({ error: 'Convite invalido' });
+  }
+
+  const client = await pool.connect();
+
+  try {
+    const invite = await getInviteByToken(client, token);
+    const inviteError = validateInvite(invite);
+    if (inviteError) {
+      return res.status(inviteError.status).json(inviteError.payload);
+    }
+
+    return res.json(buildPublicInvite(invite));
+  } catch (error) {
+    return next(error);
+  } finally {
+    client.release();
+  }
+});
+
 router.post('/social', socialRateLimit, async (req, res, next) => {
   if (!ENABLE_SOCIAL_LOGIN) {
     return res.status(501).json({ error: 'Login social indisponivel no momento' });
@@ -540,7 +661,7 @@ router.post('/social', socialRateLimit, async (req, res, next) => {
 
     if (!userResult.rowCount) {
       const now = Date.now();
-      const registrationAccess = getRegistrationAccessSeed(now);
+      const registrationAccess = getRegistrationAccessSeed(now, email);
       const randomPasswordHash = await bcrypt.hash(crypto.randomBytes(32).toString('hex'), 12);
       userResult = await client.query(
         `INSERT INTO users (

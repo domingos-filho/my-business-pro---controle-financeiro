@@ -60,8 +60,31 @@ export interface AccessLogEntry {
 export interface AccessSettings {
   defaultTrialDays: number;
   trialDayOptions: number[];
+  defaultInviteExpiresDays: number;
   registrationAccessStatus: AccessStatus;
   registrationAccessMode: string;
+}
+
+export interface InviteInfo {
+  id: number;
+  email: string;
+  accessStatus: AccessStatus;
+  accessMode: string;
+  trialDays: number | null;
+  expiresAt: number;
+  usedAt: number | null;
+  revokedAt: number | null;
+  createdAt: number;
+  updatedAt: number;
+  createdBy: number | null;
+  usedBy: number | null;
+  active: boolean;
+  createdByEmail: string | null;
+  usedByEmail: string | null;
+}
+
+export interface CreatedInvite extends InviteInfo {
+  token: string;
 }
 
 export const AdminAccessService = {
@@ -97,5 +120,27 @@ export const AdminAccessService = {
 
   async listLogs() {
     return ApiClient.request<AccessLogEntry[]>('/admin/logs');
+  },
+
+  async listInvites() {
+    return ApiClient.request<InviteInfo[]>('/admin/invites');
+  },
+
+  async createInvite(payload: {
+    email: string;
+    accessStatus: AccessStatus;
+    trialDays?: number;
+    expiresInDays?: number;
+  }) {
+    return ApiClient.request<CreatedInvite>('/admin/invites', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  },
+
+  async revokeInvite(inviteId: number) {
+    return ApiClient.request<InviteInfo>(`/admin/invites/${inviteId}/revoke`, {
+      method: 'PATCH',
+    });
   },
 };

@@ -5,6 +5,7 @@ import {
   AccessStatus,
   AccessUser,
   AdminAccessService,
+  InviteInfo,
 } from '../services/AdminAccessService';
 import { CheckCircleIcon, ClockIcon, RefreshIcon, ShieldIcon, UsersIcon } from './AppIcons';
 
@@ -42,10 +43,15 @@ const formatTrialStatus = (value: number | null) => {
 export const AccessControl: React.FC = () => {
   const [users, setUsers] = useState<AccessUser[]>([]);
   const [logs, setLogs] = useState<AccessLogEntry[]>([]);
+  const [invites, setInvites] = useState<InviteInfo[]>([]);
   const [settings, setSettings] = useState<AccessSettings | null>(null);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [trialDays, setTrialDays] = useState(14);
+  const [inviteEmail, setInviteEmail] = useState('');
+  const [inviteAccessStatus, setInviteAccessStatus] = useState<AccessStatus>('TRIAL');
+  const [inviteExpiresInDays, setInviteExpiresInDays] = useState(7);
+  const [generatedInviteLink, setGeneratedInviteLink] = useState('');
   const [summary, setSummary] = useState<{ total: number; filtered: number; byStatus: Partial<Record<AccessStatus, number>> }>({
     total: 0,
     filtered: 0,
@@ -58,13 +64,14 @@ export const AccessControl: React.FC = () => {
     setLoading(true);
     setError('');
     try {
-      const [settingsResponse, userResponse, logResponse] = await Promise.all([
+      const [settingsResponse, userResponse, logResponse, inviteResponse] = await Promise.all([
         AdminAccessService.getSettings(),
         AdminAccessService.listUsers({
           search: search.trim() || undefined,
           status: statusFilter || undefined,
         }),
         AdminAccessService.listLogs(),
+        AdminAccessService.listInvites(),
       ]);
 
       setSettings(settingsResponse);
@@ -77,6 +84,8 @@ export const AccessControl: React.FC = () => {
       setUsers(userResponse.items);
       setSummary(userResponse.summary);
       setLogs(logResponse);
+      setInvites(inviteResponse);
+      setInviteExpiresInDays((current) => (!settings ? settingsResponse.defaultInviteExpiresDays : current));
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : 'Nao foi possivel carregar o controle de acesso.');
     } finally {
@@ -127,6 +136,41 @@ export const AccessControl: React.FC = () => {
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : 'Nao foi possivel iniciar o trial da conta.');
     }
+  };
+
+  const handleCreateInvite = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setError('');
+
+    try {
+      const invite = await AdminAccessService.createInvite({
+        email: inviteEmail.trim(),
+        accessStatus: inviteAccessStatus,
+        trialDays: inviteAccessStatus === 'TRIAL' ? trialDays : undefined,
+        expiresInDays: inviteExpiresInDays,
+      });
+      setGeneratedInviteLink(`${window.location.origin}/?invite=${invite.token}`);
+      setInviteEmail('');
+      await load();
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : 'Nao foi possivel criar o convite.');
+    }
+  };
+
+  const handleRevokeInvite = async (invite: InviteInfo) => {
+    try {
+      await AdminAccessService.revokeInvite(invite.id);
+      await load();
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : 'Nao foi possivel revogar o convite.');
+    }
+  };
+
+  const getInviteStateLabel = (invite: InviteInfo) => {
+    if (invite.usedAt) return 'Usado';
+    if (invite.revokedAt) return 'Revogado';
+    if (invite.expiresAt <= Date.now()) return 'Expirado';
+    return 'Ativo';
   };
 
   return (
@@ -348,6 +392,156 @@ export const AccessControl: React.FC = () => {
               <p className="mt-2 text-sm font-medium text-slate-400">
                 Ajuste os filtros ou aguarde novos cadastros.
               </p>
+            </div>
+          )}
+        </div>
+      </section>
+
+      <section className="rounded-[2rem] border border-slate-100 bg-white p-6 shadow-sm space-y-5">
+        <div className="flex flex-col gap-2 lg:flex-row lg:items-end lg:justify-between">
+          <div>
+            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Convites</p>
+            <h3 className="mt-2 text-xl font-black text-slate-950">Links de acesso controlado</h3>
+          </div>
+          <p className="text-xs font-bold uppercase tracking-wider text-slate-400">
+            Expiram em {inviteExpiresInDays} dia{inviteExpiresInDays === 1 ? '' : 's'}
+          </p>
+        </div>
+
+        <form onSubmit={handleCreateInvite} className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_180px_180px_160px_auto]">
+          <div>
+            <label className="ml-1 mb-2 block text-[11px] font-black uppercase tracking-widest text-slate-400">
+              E-mail convidado
+            </label>
+            <input
+              type="email"
+              value={inviteEmail}
+              onChange={(event) => setInviteEmail(event.target.value)}
+              placeholder="cliente@email.com"
+              className="w-full rounded-2xl border border-slate-200 bg-slate-50 p-3.5 text-slate-900 font-medium outline-none focus:ring-2 focus:ring-indigo-500"
+              required
+            />
+          </div>
+
+          <div>
+            <label className="ml-1 mb-2 block text-[11px] font-black uppercase tracking-widest text-slate-400">
+              Acesso inicial
+            </label>
+            <select
+              value={inviteAccessStatus}
+              onChange={(event) => setInviteAccessStatus(event.target.value as AccessStatus)}
+              className="w-full rounded-2xl border border-slate-200 bg-slate-50 p-3.5 text-slate-900 font-medium outline-none focus:ring-2 focus:ring-indigo-500"
+            >
+              <option value="TRIAL">Trial</option>
+              <option value="ACTIVE">Ativo</option>
+              <option value="PENDING">Pendente</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="ml-1 mb-2 block text-[11px] font-black uppercase tracking-widest text-slate-400">
+              Dias de trial
+            </label>
+            <select
+              value={trialDays}
+              onChange={(event) => setTrialDays(Number(event.target.value))}
+              disabled={inviteAccessStatus !== 'TRIAL'}
+              className="w-full rounded-2xl border border-slate-200 bg-slate-50 p-3.5 text-slate-900 font-medium outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50"
+            >
+              {(settings?.trialDayOptions || [7, 14, 30]).map((option) => (
+                <option key={option} value={option}>
+                  {option} dias
+                  {settings?.defaultTrialDays === option ? ' (padrao)' : ''}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="ml-1 mb-2 block text-[11px] font-black uppercase tracking-widest text-slate-400">
+              Validade
+            </label>
+            <select
+              value={inviteExpiresInDays}
+              onChange={(event) => setInviteExpiresInDays(Number(event.target.value))}
+              className="w-full rounded-2xl border border-slate-200 bg-slate-50 p-3.5 text-slate-900 font-medium outline-none focus:ring-2 focus:ring-indigo-500"
+            >
+              {[3, 7, 14, 30].map((option) => (
+                <option key={option} value={option}>
+                  {option} dias
+                  {settings?.defaultInviteExpiresDays === option ? ' (padrao)' : ''}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <button
+            type="submit"
+            className="h-[52px] self-end rounded-2xl bg-slate-950 px-5 text-sm font-black text-white transition-all hover:bg-slate-800 active:scale-95"
+          >
+            Criar convite
+          </button>
+        </form>
+
+        {generatedInviteLink && (
+          <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
+            <label className="mb-2 block text-[11px] font-black uppercase tracking-widest text-emerald-700">
+              Link gerado
+            </label>
+            <div className="flex flex-col gap-3 lg:flex-row">
+              <input
+                readOnly
+                value={generatedInviteLink}
+                className="min-w-0 flex-1 rounded-2xl border border-emerald-200 bg-white p-3 text-sm font-medium text-slate-700"
+              />
+              <button
+                type="button"
+                onClick={() => navigator.clipboard?.writeText(generatedInviteLink)}
+                className="rounded-2xl bg-emerald-600 px-5 py-3 text-sm font-black text-white transition-all hover:bg-emerald-700 active:scale-95"
+              >
+                Copiar link
+              </button>
+            </div>
+          </div>
+        )}
+
+        <div className="space-y-3">
+          {invites.slice(0, 8).map((invite) => (
+            <article key={invite.id} className="rounded-2xl border border-slate-100 bg-slate-50/60 p-4">
+              <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="font-black text-slate-950 break-all">{invite.email}</p>
+                    <span className={`rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-wider ${STATUS_STYLES[invite.accessStatus] || 'bg-slate-100 text-slate-700'}`}>
+                      {invite.accessStatus}
+                    </span>
+                    <span className="rounded-full bg-slate-200 px-3 py-1 text-[10px] font-black uppercase tracking-wider text-slate-700">
+                      {getInviteStateLabel(invite)}
+                    </span>
+                  </div>
+                  <p className="mt-2 text-sm font-medium text-slate-500">
+                    Expira em {formatDate(invite.expiresAt)}
+                    {invite.trialDays ? ` - trial de ${invite.trialDays} dias` : ''}
+                    {invite.usedByEmail ? ` - usado por ${invite.usedByEmail}` : ''}
+                  </p>
+                </div>
+
+                {invite.active && (
+                  <button
+                    type="button"
+                    onClick={() => handleRevokeInvite(invite)}
+                    className="rounded-2xl border border-rose-200 bg-white px-4 py-3 text-sm font-black text-rose-700 transition-all hover:bg-rose-50 active:scale-95"
+                  >
+                    Revogar
+                  </button>
+                )}
+              </div>
+            </article>
+          ))}
+
+          {!invites.length && (
+            <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-center text-sm font-medium text-slate-400">
+              Nenhum convite criado ainda.
             </div>
           )}
         </div>

@@ -40,6 +40,8 @@ Copie `.env.example` para `.env` (Docker) ou configure no EasyPanel:
 - `REGISTRATION_TRIAL_DAYS`: duracao padrao do trial quando `REGISTRATION_ACCESS_STATUS=TRIAL`
 - `DEFAULT_TRIAL_DAYS`: duracao padrao aplicada pelo painel admin ao iniciar/renovar trial
 - `TRIAL_DAY_OPTIONS`: opcoes exibidas no painel admin para iniciar/renovar trial, separadas por virgula
+- `DEFAULT_INVITE_EXPIRES_DAYS`: validade padrao dos convites gerados no painel admin
+- `INVITE_TOKEN_SECRET`: segredo opcional para hash dos convites (fallback para `JWT_REFRESH_SECRET`)
 - `ALLOW_LEGACY_DATA_CLAIM`: habilita endpoint explicito para reivindicar dados legados sem `user_id`
 - `APP_PORT`: porta publicada do frontend web no host (default `40`)
 - `API_PORT`: porta publicada da API no host (default `4000`)
@@ -149,6 +151,8 @@ O sistema agora suporta:
 - bootstrap administrativo por `ADMIN_EMAILS`
 - ativacao e renovacao de trial pelo painel administrativo
 - expiracao de trial validada no backend em login, refresh e rotas protegidas
+- convites de uso unico com token hasheado no banco
+- cadastro por convite com status inicial controlado pelo admin
 
 Recomendacao operacional:
 
@@ -156,6 +160,7 @@ Recomendacao operacional:
 2. mantenha `REGISTRATION_ACCESS_STATUS=PENDING`
 3. aprove manualmente novas contas no painel admin
 4. use trial para liberar teste por 7, 14 ou 30 dias antes de ativar definitivamente
+5. use convites quando quiser liberar onboarding direto por link controlado
 
 Com `REGISTRATION_ACCESS_STATUS=PENDING`, novos usuarios nao entram em trial automaticamente. Para cadastro ja nascer em teste, use `REGISTRATION_ACCESS_STATUS=TRIAL` e ajuste `REGISTRATION_TRIAL_DAYS`.
 

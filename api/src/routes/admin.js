@@ -2,6 +2,7 @@ import express from 'express';
 import {
   ACCESS_MODE,
   ACCESS_STATUS,
+  DEFAULT_INVITE_EXPIRES_DAYS,
   DEFAULT_TRIAL_DAYS,
   REGISTRATION_ACCESS_MODE,
   REGISTRATION_ACCESS_STATUS,
@@ -13,6 +14,7 @@ import {
   toPublicAccessMetadata,
 } from '../access.js';
 import { pool } from '../db.js';
+import { createInviteToken, hashInviteToken } from '../invites.js';
 
 const router = express.Router();
 
@@ -35,6 +37,9 @@ const toPositiveDays = (value, fallback = DEFAULT_TRIAL_DAYS) => {
   return Number.isFinite(parsed) && parsed > 0 ? Math.trunc(parsed) : fallback;
 };
 
+const inviteStatuses = new Set([ACCESS_STATUS.PENDING, ACCESS_STATUS.TRIAL, ACCESS_STATUS.ACTIVE]);
+const validEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+
 const buildAdminUser = (row) => {
   const access = evaluateAccess(row);
 
@@ -52,6 +57,31 @@ const buildAdminUser = (row) => {
     ...toPublicAccessMetadata(row),
     effectiveAccessAllowed: access.allowed,
     effectiveAccessCode: access.code,
+  };
+};
+
+const buildInvite = (row) => {
+  const now = Date.now();
+  const usedAt = row.used_at === null ? null : Number(row.used_at);
+  const revokedAt = row.revoked_at === null ? null : Number(row.revoked_at);
+  const expiresAt = Number(row.expires_at);
+
+  return {
+    id: Number(row.id),
+    email: row.email,
+    accessStatus: normalizeAccessStatus(row.access_status),
+    accessMode: normalizeAccessMode(row.access_mode),
+    trialDays: row.trial_days === null ? null : Number(row.trial_days),
+    expiresAt,
+    usedAt,
+    revokedAt,
+    createdAt: Number(row.created_at),
+    updatedAt: Number(row.updated_at),
+    createdBy: row.created_by === null ? null : Number(row.created_by),
+    usedBy: row.used_by === null ? null : Number(row.used_by),
+    active: !usedAt && !revokedAt && expiresAt > now,
+    createdByEmail: row.created_by_email || null,
+    usedByEmail: row.used_by_email || null,
   };
 };
 
@@ -79,9 +109,117 @@ router.get('/settings', (_req, res) => {
   return res.json({
     defaultTrialDays: DEFAULT_TRIAL_DAYS,
     trialDayOptions: TRIAL_DAY_OPTIONS,
+    defaultInviteExpiresDays: DEFAULT_INVITE_EXPIRES_DAYS,
     registrationAccessStatus: REGISTRATION_ACCESS_STATUS,
     registrationAccessMode: REGISTRATION_ACCESS_MODE,
   });
+});
+
+router.get('/invites', async (_req, res, next) => {
+  try {
+    const result = await pool.query(
+      `SELECT
+         i.id,
+         i.email,
+         i.access_status,
+         i.access_mode,
+         i.trial_days,
+         i.expires_at,
+         i.used_at,
+         i.revoked_at,
+         i.created_by,
+         i.used_by,
+         i.created_at,
+         i.updated_at,
+         c.email AS created_by_email,
+         u.email AS used_by_email
+       FROM invites i
+       LEFT JOIN users c ON c.id = i.created_by
+       LEFT JOIN users u ON u.id = i.used_by
+       ORDER BY i.created_at DESC
+       LIMIT 100`
+    );
+
+    return res.json(result.rows.map(buildInvite));
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.post('/invites', async (req, res, next) => {
+  const email = String(req.body?.email || '').trim().toLowerCase();
+  if (!validEmail(email)) {
+    return res.status(400).json({ error: 'E-mail de convite invalido' });
+  }
+
+  const accessStatus = normalizeAccessStatus(req.body?.accessStatus, ACCESS_STATUS.TRIAL);
+  if (!inviteStatuses.has(accessStatus)) {
+    return res.status(400).json({ error: 'Status inicial do convite invalido' });
+  }
+
+  const trialDays = accessStatus === ACCESS_STATUS.TRIAL ? toPositiveDays(req.body?.trialDays) : null;
+  const expiresInDays = toPositiveDays(req.body?.expiresInDays, DEFAULT_INVITE_EXPIRES_DAYS);
+  const token = createInviteToken();
+  const tokenHash = hashInviteToken(token);
+  const now = Date.now();
+  const expiresAt = now + expiresInDays * 24 * 60 * 60 * 1000;
+  const accessMode = ACCESS_MODE.INVITE;
+
+  try {
+    const result = await pool.query(
+      `INSERT INTO invites (
+         email,
+         token_hash,
+         access_status,
+         access_mode,
+         trial_days,
+         expires_at,
+         used_at,
+         revoked_at,
+         created_by,
+         used_by,
+         created_at,
+         updated_at
+       )
+       VALUES ($1, $2, $3, $4, $5, $6, NULL, NULL, $7, NULL, $8, $8)
+       RETURNING *`,
+      [email, tokenHash, accessStatus, accessMode, trialDays, expiresAt, req.user.id, now],
+    );
+
+    return res.status(201).json({
+      ...buildInvite(result.rows[0]),
+      token,
+    });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.patch('/invites/:inviteId/revoke', async (req, res, next) => {
+  const inviteId = Number(req.params.inviteId);
+  if (!Number.isInteger(inviteId) || inviteId <= 0) {
+    return res.status(400).json({ error: 'Convite invalido' });
+  }
+
+  try {
+    const now = Date.now();
+    const result = await pool.query(
+      `UPDATE invites
+       SET revoked_at = COALESCE(revoked_at, $2),
+           updated_at = $2
+       WHERE id = $1
+       RETURNING *`,
+      [inviteId, now],
+    );
+
+    if (!result.rowCount) {
+      return res.status(404).json({ error: 'Convite nao encontrado' });
+    }
+
+    return res.json(buildInvite(result.rows[0]));
+  } catch (error) {
+    return next(error);
+  }
 });
 
 router.get('/users', async (req, res, next) => {

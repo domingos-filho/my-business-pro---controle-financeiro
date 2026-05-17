@@ -29,6 +29,14 @@ export interface SessionInfo {
   active: boolean;
 }
 
+export interface InvitePreview {
+  email: string;
+  accessStatus: User['accessStatus'];
+  accessMode: User['accessMode'];
+  trialDays: number | null;
+  expiresAt: number;
+}
+
 export const AuthService = {
   async loginWithEmail(email: string, password: string): Promise<User> {
     return ApiClient.request<User>('/auth/login', {
@@ -44,11 +52,15 @@ export const AuthService = {
     });
   },
 
-  async register(name: string, email: string, password: string): Promise<User> {
+  async register(name: string, email: string, password: string, inviteToken?: string): Promise<User> {
     return ApiClient.request<User>('/auth/register', {
       method: 'POST',
-      body: JSON.stringify({ name, email, password }),
+      body: JSON.stringify({ name, email, password, inviteToken }),
     });
+  },
+
+  async getInvite(token: string): Promise<InvitePreview> {
+    return ApiClient.request<InvitePreview>(`/auth/invites/${encodeURIComponent(token)}`);
   },
 
   async logout() {

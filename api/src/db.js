@@ -174,6 +174,33 @@ const createUserAccessLogsIndexesSql = [
   'CREATE INDEX IF NOT EXISTS user_access_logs_created_at_idx ON user_access_logs (created_at);',
 ];
 
+const createInvitesTableSql = `
+  CREATE TABLE IF NOT EXISTS invites (
+    id SERIAL PRIMARY KEY,
+    email TEXT NOT NULL,
+    token_hash TEXT NOT NULL,
+    access_status TEXT NOT NULL,
+    access_mode TEXT NOT NULL,
+    trial_days INTEGER NULL,
+    expires_at BIGINT NOT NULL,
+    used_at BIGINT NULL,
+    revoked_at BIGINT NULL,
+    created_by INTEGER NULL REFERENCES users(id) ON DELETE SET NULL,
+    used_by INTEGER NULL REFERENCES users(id) ON DELETE SET NULL,
+    created_at BIGINT NOT NULL,
+    updated_at BIGINT NOT NULL
+  );
+`;
+
+const createInviteIndexesSql = [
+  'CREATE UNIQUE INDEX IF NOT EXISTS invites_token_hash_unique_idx ON invites (token_hash);',
+  'CREATE INDEX IF NOT EXISTS invites_email_idx ON invites (lower(email));',
+  'CREATE INDEX IF NOT EXISTS invites_expires_at_idx ON invites (expires_at);',
+  'CREATE INDEX IF NOT EXISTS invites_used_at_idx ON invites (used_at);',
+  'CREATE INDEX IF NOT EXISTS invites_revoked_at_idx ON invites (revoked_at);',
+  'CREATE INDEX IF NOT EXISTS invites_created_by_idx ON invites (created_by);',
+];
+
 const adminEmails = String(process.env.ADMIN_EMAILS || '')
   .split(',')
   .map((email) => email.trim().toLowerCase())
@@ -320,6 +347,11 @@ const ensureSchema = async () => {
 
     await client.query(createUserAccessLogsTableSql);
     for (const stmt of createUserAccessLogsIndexesSql) {
+      await client.query(stmt);
+    }
+
+    await client.query(createInvitesTableSql);
+    for (const stmt of createInviteIndexesSql) {
       await client.query(stmt);
     }
 

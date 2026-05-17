@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { AuthService, User } from '../services/AuthService';
+import React, { useEffect, useState } from 'react';
+import { AuthService, InvitePreview, User } from '../services/AuthService';
 import { ApiError } from '../services/apiClient';
 import { BrandLogo } from './BrandLogo';
 
@@ -16,11 +16,41 @@ export const Auth: React.FC<AuthProps> = ({ onLogin }) => {
   const [errorMessage, setErrorMessage] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [accessNotice, setAccessNotice] = useState<{ title: string; message: string } | null>(null);
+  const [inviteToken] = useState(() => new URLSearchParams(window.location.search).get('invite') || '');
+  const [invitePreview, setInvitePreview] = useState<InvitePreview | null>(null);
+  const [inviteLoading, setInviteLoading] = useState(false);
   const socialLoginEnabled = import.meta.env.VITE_ENABLE_SOCIAL_LOGIN === 'true';
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
+
+  useEffect(() => {
+    if (!inviteToken) return;
+
+    let active = true;
+    setStep('signup');
+    setInviteLoading(true);
+    setErrorMessage('');
+
+    AuthService.getInvite(inviteToken)
+      .then((invite) => {
+        if (!active) return;
+        setInvitePreview(invite);
+        setEmail(invite.email);
+      })
+      .catch((error) => {
+        if (!active) return;
+        setErrorMessage(error instanceof Error ? error.message : 'Convite invalido ou expirado.');
+      })
+      .finally(() => {
+        if (active) setInviteLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [inviteToken]);
 
   const goToStep = (nextStep: AuthStep) => {
     setErrorMessage('');
@@ -58,7 +88,7 @@ export const Auth: React.FC<AuthProps> = ({ onLogin }) => {
     setAccessNotice(null);
     setLoading(true);
     try {
-      const user = await AuthService.register(name, email, password);
+      const user = await AuthService.register(name, email, password, inviteToken || undefined);
       onLogin(user);
     } catch (error) {
       if (
@@ -196,6 +226,16 @@ export const Auth: React.FC<AuthProps> = ({ onLogin }) => {
                     placeholder="Nome do seu negocio"
                     required
                   />
+                </div>
+              )}
+
+              {step === 'signup' && inviteToken && (
+                <div className="rounded-2xl border border-indigo-100 bg-indigo-50 px-4 py-3 text-sm font-bold text-indigo-800">
+                  {inviteLoading
+                    ? 'Validando convite...'
+                    : invitePreview
+                      ? `Convite aplicado para ${invitePreview.email}. Acesso inicial: ${invitePreview.accessStatus}.`
+                      : 'Informe os dados para continuar com o convite.'}
                 </div>
               )}
 
